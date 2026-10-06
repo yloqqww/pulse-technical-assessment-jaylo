@@ -316,7 +316,7 @@ export default function Home() {
   const inChat = conn.kind === "connecting" || conn.kind === "connected";
 
   return (
-    <main className="fixed inset-0 overflow-hidden">
+    <main className="fixed inset-0 overflow-hidden bg-[#07090b]">
       <WorldMap
         peers={peers}
         me={myLocation}
@@ -325,17 +325,24 @@ export default function Home() {
       />
 
       {notice && (
-        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          {notice}
+        <div
+          role="status"
+          className="map-chip ui-enter-fast absolute left-1/2 top-[max(4.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl px-4 py-2.5 text-xs text-zinc-200"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+          <span className="whitespace-nowrap">{notice}</span>
         </div>
       )}
 
       {conn.kind === "requesting" && (
-        <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          <span>Requesting connection…</span>
+        <div className="map-chip ui-enter-fast absolute left-1/2 top-[max(4.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 flex -translate-x-1/2 items-center gap-3 rounded-xl py-1.5 pl-3.5 pr-1.5 text-xs text-zinc-200">
+          <span className="flex items-center gap-2 whitespace-nowrap">
+            <span className="locating-spinner !h-3.5 !w-3.5 !border-white/15 !border-t-[#74e8bd]" />
+            Requesting connection…
+          </span>
           <button
             onClick={cancelRequest}
-            className="rounded-full bg-zinc-700 px-3 py-1 text-xs hover:bg-zinc-600"
+            className="focus-ring pressable min-h-8 rounded-lg border border-white/8 bg-white/[0.06] px-3 text-[11px] font-medium text-zinc-300 hover:bg-white/10"
           >
             Cancel
           </button>
@@ -367,8 +374,9 @@ export default function Home() {
       )}
 
       {video === "requesting" && (
-        <div className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          Waiting for stranger to accept video…
+        <div className="map-chip ui-enter-fast absolute bottom-[max(5rem,calc(env(safe-area-inset-bottom)+5rem))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl px-4 py-2.5 text-xs text-zinc-200">
+          <span className="locating-spinner !h-3.5 !w-3.5 !border-white/15 !border-t-[#74e8bd]" />
+          <span className="whitespace-nowrap">Waiting for video approval…</span>
         </div>
       )}
 

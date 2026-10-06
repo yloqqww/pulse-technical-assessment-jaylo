@@ -58,6 +58,7 @@ export default function WorldMap({
         center: me ? [me.lng, me.lat] : [0, 20],
         zoom: me ? 4 : 1.4,
         attributionControl: true,
+        fadeDuration: 180,
       });
       map.on("load", () => {
         if (!cancelled) setReady(true);
@@ -91,8 +92,8 @@ export default function WorldMap({
       if (!meMarkerRef.current) {
         const el = document.createElement("div");
         el.className = "pulse-me";
-        el.title = "You are here";
-        el.innerHTML = `<span class="pulse-me-label">Me</span>📍`;
+        el.title = "Your approximate location";
+        el.innerHTML = `<span class="pulse-me-label">You</span>`;
         // anchor "bottom" → the pin's tip sits on the exact coordinate.
         meMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([me.lng, me.lat])
@@ -126,7 +127,9 @@ export default function WorldMap({
           const el = document.createElement("button");
           el.className = "pulse-dot";
           el.style.background = dotColor(peer.id);
-          el.title = "Tap to connect";
+          el.type = "button";
+          el.title = peer.busy ? "Currently in a conversation" : "Connect with this person";
+          el.setAttribute("aria-label", peer.busy ? "Person is currently busy" : "Connect with this person");
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             if (canConnectRef.current) onPeerClickRef.current(peer.id);
@@ -136,7 +139,10 @@ export default function WorldMap({
             .addTo(map);
           markers.set(peer.id, marker);
         }
-        marker.getElement().style.opacity = peer.busy ? "0.35" : "1";
+        marker.getElement().dataset.busy = String(peer.busy);
+        marker.getElement().style.opacity = peer.busy ? "0.42" : "1";
+        marker.getElement().title = peer.busy ? "Currently in a conversation" : "Connect with this person";
+        marker.getElement().setAttribute("aria-label", peer.busy ? "Person is currently busy" : "Connect with this person");
       }
 
       // Drop markers for peers that went offline / got filtered out.
@@ -155,11 +161,12 @@ export default function WorldMap({
 
   return (
     <div className="absolute inset-0">
-      <div ref={containerRef} className="h-full w-full bg-zinc-900" />
+      <div ref={containerRef} className="pulse-map h-full w-full bg-[#0b0f11]" />
+      <div className="map-vignette" aria-hidden="true" />
 
       {!TOKEN && (
         <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
-          <p className="max-w-md rounded-lg bg-zinc-800 p-4 text-sm text-zinc-200">
+          <p className="glass-panel max-w-md rounded-2xl p-5 text-sm leading-6 text-zinc-200">
             Set{" "}
             <code className="text-emerald-400">NEXT_PUBLIC_MAPBOX_TOKEN</code> in{" "}
             <code>.env</code> to load the map.
@@ -167,9 +174,30 @@ export default function WorldMap({
         </div>
       )}
 
-      {/* Online count */}
-      <div className="absolute bottom-4 left-4 rounded-full bg-zinc-900/80 px-3 py-1.5 text-xs text-zinc-300 backdrop-blur">
-        {peers.length} online
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
+        <div className="map-chip pointer-events-auto flex h-10 items-center gap-2.5 rounded-xl px-3.5 text-sm font-semibold tracking-[-0.02em] text-white">
+          <span className="h-2 w-2 rounded-full bg-[#74e8bd] shadow-[0_0_12px_rgba(116,232,189,0.65)]" aria-hidden="true" />
+          Pulse
+        </div>
+        <div className="map-chip hidden h-10 items-center gap-2 rounded-xl px-3.5 text-[11px] text-zinc-400 sm:flex">
+          <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
+            <path d="M8 1.75 13 4v3.7c0 3.1-2.1 5.4-5 6.55-2.9-1.15-5-3.45-5-6.55V4l5-2.25Z" stroke="currentColor" strokeWidth="1.2" />
+            <path d="m5.75 8 1.4 1.4 3.15-3.15" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Anonymous session
+        </div>
+      </div>
+
+      <div
+        aria-live="polite"
+        className="map-chip absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs text-zinc-300 sm:bottom-5 sm:left-5"
+      >
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-[#74e8bd] opacity-35" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#74e8bd]" />
+        </span>
+        <span className="font-medium text-zinc-100">{peers.length}</span>
+        <span className="text-zinc-500">online now</span>
       </div>
     </div>
   );
