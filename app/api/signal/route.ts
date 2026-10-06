@@ -76,12 +76,15 @@ export async function POST(request: NextRequest) {
       where: { id: { in: [fromId, toId] } },
       data: { busy: true },
     });
-  } else if (signalType === "decline") {
-    await prisma.presence.updateMany({
-      where: { id: { in: [fromId, toId] } },
-      data: { busy: false },
-    });
-  }
+    } else if (
+      signalType === "decline" ||
+      signalType === "end"
+    ) {
+      await prisma.presence.updateMany({
+        where: { id: { in: [fromId, toId] } },
+        data: { busy: false },
+      });
+    }
 
   await prisma.signal.create({
     data: { fromId, toId, type: signalType, payload: payloadStr },
