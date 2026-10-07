@@ -133,6 +133,7 @@ export default function ChatPanel({
             placeholder={connected ? "Write a message…" : "Connecting…"}
             disabled={!connected}
             autoComplete="off"
+            maxLength={2000}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed"
           />
           <button

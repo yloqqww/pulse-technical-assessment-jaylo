@@ -1,31 +1,43 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  hasOnlyKeys,
+  InvalidRequestError,
+  MAX_LEAVE_BODY_BYTES,
+  noStoreJson,
+  readLimitedJsonObject,
+} from "@/lib/api-security";
+import { authenticateSession } from "@/lib/session-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/leave — body { id }. Removes the presence row and any pending
-// signals to/from this user. Called via navigator.sendBeacon on tab close, so
-// the body may arrive as text — parse defensively.
+// POST /api/leave — body { id, token }. sendBeacon cannot reliably attach an
+// Authorization header, so the private token is accepted only in this bounded,
+// same-origin request body.
 export async function POST(request: NextRequest) {
-  let id: string | undefined;
+  let body: Record<string, unknown>;
   try {
-    const text = await request.text();
-    id = text ? (JSON.parse(text)?.id as string | undefined) : undefined;
-  } catch {
-    id = undefined;
+    body = await readLimitedJsonObject(request, MAX_LEAVE_BODY_BYTES, false);
+  } catch (error) {
+    const message =
+      error instanceof InvalidRequestError ? error.message : "invalid body";
+    return noStoreJson({ error: message }, { status: 400 });
   }
 
-  if (typeof id !== "string" || !id) {
-    return Response.json({ error: "invalid id" }, { status: 400 });
+  if (!hasOnlyKeys(body, ["id", "token"])) {
+    return noStoreJson({ error: "invalid body" }, { status: 400 });
   }
 
-  // Independent cleanup deletes — no atomicity needed (and interactive
-  // transactions are unreliable over a PgBouncer pooler).
+  const session = await authenticateSession(body.id, body.token);
+  if (!session) {
+    return noStoreJson({ error: "unauthorized" }, { status: 401 });
+  }
+
   await prisma.signal.deleteMany({
-    where: { OR: [{ toId: id }, { fromId: id }] },
+    where: { OR: [{ toId: session.id }, { fromId: session.id }] },
   });
-  await prisma.presence.deleteMany({ where: { id } });
+  await prisma.presence.delete({ where: { id: session.id } });
 
-  return Response.json({ ok: true });
+  return noStoreJson({ ok: true });
 }

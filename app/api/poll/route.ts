@@ -2,73 +2,70 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { STALE_MS, SIGNAL_TTL_MS } from "@/lib/presence";
 import type { PollResponse } from "@/lib/types";
+import { noStoreJson } from "@/lib/api-security";
+import { authenticateRequest } from "@/lib/session-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/poll?id= — the single endpoint that drives the live map.
-// It (1) heartbeats the caller, (2) reaps stale presence + orphan signals,
-// (3) returns the filtered online peers, and (4) drains this user's mailbox.
-export async function GET(request: NextRequest) {
-  const params = request.nextUrl.searchParams;
-  const id = params.get("id");
+const MAX_PEERS_PER_POLL = 5_000;
+const MAX_SIGNALS_PER_POLL = 128;
 
-  if (!id) {
-    return Response.json({ error: "missing id" }, { status: 400 });
+// GET /api/poll — authenticated heartbeat, map snapshot, and mailbox drain.
+export async function GET(request: NextRequest) {
+  const session = await authenticateRequest(request);
+  if (!session) {
+    return noStoreJson({ error: "unauthorized" }, { status: 401 });
   }
 
   const now = Date.now();
   const staleCutoff = new Date(now - STALE_MS);
   const signalCutoff = new Date(now - SIGNAL_TTL_MS);
 
-  // 1) Heartbeat — refresh lastSeen for the caller.
-  await prisma.presence.updateMany({
-    where: { id },
+  await prisma.presence.update({
+    where: { id: session.id },
     data: { lastSeen: new Date(now) },
   });
 
-  // 2) Reap stale presence rows and orphaned signals (independent deletes —
-  // no atomicity needed, and avoids transactions over a PgBouncer pooler).
   await prisma.presence.deleteMany({ where: { lastSeen: { lt: staleCutoff } } });
   await prisma.signal.deleteMany({ where: { createdAt: { lt: signalCutoff } } });
 
-  // 3) Online peers, excluding self.
   const peers = await prisma.presence.findMany({
     where: {
-      id: { not: id },
+      id: { not: session.id },
       lastSeen: { gte: staleCutoff },
     },
     select: { id: true, lat: true, lng: true, busy: true },
+    take: MAX_PEERS_PER_POLL,
   });
 
-  // 4) Drain this user's mailbox: read, then delete exactly what we read so a
-  // concurrently-inserted signal is never lost.
   const inbox = await prisma.signal.findMany({
-    where: { toId: id },
+    where: { toId: session.id },
     orderBy: { createdAt: "asc" },
+    take: MAX_SIGNALS_PER_POLL,
   });
   if (inbox.length > 0) {
     await prisma.signal.deleteMany({
-      where: { id: { in: inbox.map((s) => s.id) } },
+      where: { id: { in: inbox.map((signal) => signal.id) } },
     });
   }
 
   const response: PollResponse = {
-    peers: peers.map((p) => ({
-      id: p.id,
-      lat: p.lat,
-      lng: p.lng,
-      busy: p.busy,
+    peers: peers.map((peer) => ({
+      id: peer.id,
+      lat: peer.lat,
+      lng: peer.lng,
+      busy: peer.busy,
     })),
-    signals: inbox.map((s) => ({
-      id: s.id,
-      fromId: s.fromId,
-      toId: s.toId,
-      type: s.type as PollResponse["signals"][number]["type"],
-      payload: s.payload,
-      createdAt: s.createdAt.toISOString(),
+    signals: inbox.map((signal) => ({
+      id: signal.id,
+      fromId: signal.fromId,
+      toId: signal.toId,
+      type: signal.type as PollResponse["signals"][number]["type"],
+      payload: signal.payload,
+      createdAt: signal.createdAt.toISOString(),
     })),
   };
 
-  return Response.json(response);
+  return noStoreJson(response);
 }

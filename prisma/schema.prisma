@@ -12,11 +12,12 @@ datasource db {
 }
 
 model Presence {
-  id       String   @id // client-generated session uuid
-  lat      Float // ALREADY privacy-offset coords (raw is never stored)
-  lng      Float
-  busy     Boolean  @default(false) // true while in an active connection
-  lastSeen DateTime
+  id        String   @id // server-generated public session uuid
+  tokenHash String?  // SHA-256 of the private session token; nullable only for pre-migration rows
+  lat       Float // ALREADY privacy-offset coords (raw is never stored)
+  lng       Float
+  busy      Boolean  @default(false) // true while in an active connection
+  lastSeen  DateTime
 
   @@index([lastSeen])
 }
@@ -31,4 +32,6 @@ model Signal {
   createdAt DateTime @default(now())
 
   @@index([toId])
+  @@index([fromId])
+  @@index([createdAt])
 }

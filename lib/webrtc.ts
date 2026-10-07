@@ -6,6 +6,15 @@ export type PeerControl =
   | "video-decline"
   | "video-end";
 
+const MAX_CHAT_BYTES = 4 * 1024;
+const MAX_DATA_CHANNEL_MESSAGE_BYTES = 8 * 1024;
+const VALID_CONTROLS = new Set<PeerControl>([
+  "video-request",
+  "video-accept",
+  "video-decline",
+  "video-end",
+]);
+
 interface PeerCallbacks {
   onSignal: (type: DescType, payload: string) => void;
   onChat: (text: string) => void;
@@ -98,28 +107,65 @@ export class PeerSession {
     };
 
     dc.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data as string);
+      if (
+        typeof event.data !== "string" ||
+        new TextEncoder().encode(event.data).byteLength >
+        MAX_DATA_CHANNEL_MESSAGE_BYTES
+      ) {
+        console.warn("Ignoring oversized or non-text data channel message");
+        return;
+      }
 
-        if (msg.t === "chat" && typeof msg.text === "string") {
+      try {
+        const msg: unknown = JSON.parse(event.data);
+
+        if (typeof msg !== "object" || msg === null) return;
+
+        if (
+          "t" in msg &&
+          msg.t === "chat" &&
+          "text" in msg &&
+          typeof msg.text === "string" &&
+          new TextEncoder().encode(msg.text).byteLength <= MAX_CHAT_BYTES
+        ) {
           this.cb.onChat(msg.text);
           return;
         }
 
-        if (msg.t === "ctrl" && typeof msg.ctrl === "string") {
-          this.cb.onControl(msg.ctrl as PeerControl);
+        if (
+          "t" in msg &&
+          msg.t === "ctrl" &&
+          "ctrl" in msg &&
+          typeof msg.ctrl === "string" &&
+          isPeerControl(msg.ctrl)
+        ) {
+          this.cb.onControl(msg.ctrl);
         }
       } catch (error) {
         console.error("Invalid data channel message:", error);
       }
     };
 
-    dc.onerror = (error) => {
-      console.error("Data channel error:", error);
+    dc.onerror = (event) => {
+      if (
+        this.closed ||
+        dc.readyState === "closing" ||
+        dc.readyState === "closed"
+      ) {
+        return;
+      }
+
+      const rtcEvent = event as RTCErrorEvent;
+
+      console.warn("WebRTC data channel warning:", {
+        message: rtcEvent.error?.message ?? "Unknown data channel error",
+        detail: rtcEvent.error?.errorDetail,
+        readyState: dc.readyState,
+      });
     };
   }
 
-  async handleSignal(type: DescType, payload: string) {
+  async handleSignal(type: DescType, payload: string): Promise<void> {
     if (this.closed) return;
 
     let data: unknown;
@@ -266,29 +312,35 @@ export class PeerSession {
     }
   }
 
-  sendChat(text: string) {
-    this.safeSend({
+  sendChat(text: string): boolean {
+    if (new TextEncoder().encode(text).byteLength > MAX_CHAT_BYTES) {
+      return false;
+    }
+
+    return this.safeSend({
       t: "chat",
       text,
     });
   }
 
-  sendControl(ctrl: PeerControl) {
-    this.safeSend({
+  sendControl(ctrl: PeerControl): boolean {
+    return this.safeSend({
       t: "ctrl",
       ctrl,
     });
   }
 
-  private safeSend(obj: unknown) {
+  private safeSend(obj: unknown): boolean {
     if (!this.dc || this.dc.readyState !== "open") {
-      return;
+      return false;
     }
 
     try {
       this.dc.send(JSON.stringify(obj));
+      return true;
     } catch (error) {
       console.error("Failed to send data channel message:", error);
+      return false;
     }
   }
 
@@ -345,15 +397,19 @@ export class PeerSession {
     if (this.dc) {
       try {
         this.dc.close();
-      } catch {}
+      } catch { }
 
       this.dc = null;
     }
 
     try {
       this.pc.close();
-    } catch {}
+    } catch { }
 
     this.cb.onRemoteStream(null);
   }
+}
+
+function isPeerControl(value: string): value is PeerControl {
+  return VALID_CONTROLS.has(value as PeerControl);
 }

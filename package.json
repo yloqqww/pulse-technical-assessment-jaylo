@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "npx prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:security-integration": "node tests/api-security.integration.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
