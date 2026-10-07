@@ -113,12 +113,68 @@ button {
 .entry-shell {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 100dvh;
   background:
     radial-gradient(circle at 50% 38%, rgba(33, 76, 62, 0.18), transparent 32%),
     radial-gradient(circle at 50% 100%, rgba(116, 232, 189, 0.06), transparent 36%),
     #07090b;
+}
+
+.intent-option {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .intent-option:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.intent-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.intent-option-selected {
+  border-color: rgba(116, 232, 189, 0.32);
+  background: rgba(116, 232, 189, 0.075);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.intent-option-mark {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #9ba5a2;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.intent-option-selected .intent-option-mark {
+  border-color: rgba(116, 232, 189, 0.24);
+  background: rgba(116, 232, 189, 0.12);
+  color: #b8f6dd;
 }
 
 .entry-shell::before {
@@ -232,6 +288,7 @@ button {
 }
 
 .pulse-dot {
+  --intent-color: var(--accent);
   position: relative;
   width: 16px;
   height: 16px;
@@ -251,11 +308,48 @@ button {
 .pulse-dot::after {
   position: absolute;
   inset: -7px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid color-mix(in srgb, var(--intent-color) 55%, transparent);
   border-radius: inherit;
   content: "";
   animation: presence-ring 2.4s var(--ease-out) infinite;
   pointer-events: none;
+}
+
+.pulse-dot::before {
+  position: absolute;
+  z-index: 1;
+  top: -9px;
+  right: -10px;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--intent-color) 45%, #111719);
+  border-radius: 5px;
+  background: #101719;
+  color: var(--intent-color);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  content: attr(data-intent-symbol);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.pulse-dot[data-intent="listen"],
+.pulse-me[data-intent="listen"] {
+  --intent-color: #82b8ff;
+}
+
+.pulse-dot[data-intent="advice"],
+.pulse-me[data-intent="advice"] {
+  --intent-color: #f4c978;
+}
+
+.pulse-dot[data-intent="celebrate"],
+.pulse-me[data-intent="celebrate"] {
+  --intent-color: #f2a0c4;
 }
 
 .pulse-dot[data-busy="true"] {
@@ -277,6 +371,7 @@ button {
 }
 
 .pulse-me {
+  --intent-color: var(--accent);
   position: relative;
   display: grid;
   width: 24px;
@@ -290,10 +385,10 @@ button {
   height: 10px;
   border: 2px solid #06110d;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--intent-color);
   box-shadow:
-    0 0 0 3px rgba(116, 232, 189, 0.2),
-    0 0 20px rgba(116, 232, 189, 0.42);
+    0 0 0 3px color-mix(in srgb, var(--intent-color) 20%, transparent),
+    0 0 20px color-mix(in srgb, var(--intent-color) 42%, transparent);
   content: "";
 }
 

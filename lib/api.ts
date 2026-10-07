@@ -1,5 +1,6 @@
 // Client-side helpers for the anonymous coordination API.
 import type { PollResponse, SignalType } from "@/lib/types";
+import type { ConversationIntent } from "@/lib/intent";
 import type { SessionCredentials } from "@/lib/api-security";
 
 export type { SessionCredentials } from "@/lib/api-security";
@@ -7,11 +8,12 @@ export type { SessionCredentials } from "@/lib/api-security";
 export async function join(
   lat: number,
   lng: number,
+  intent: ConversationIntent,
 ): Promise<SessionCredentials> {
   const response = await fetch("/api/join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lat, lng }),
+    body: JSON.stringify({ lat, lng, intent }),
   });
 
   const data = await readJsonResponse<unknown>(response, "join");

@@ -16,6 +16,7 @@ model Presence {
   tokenHash String?  // SHA-256 of the private session token; nullable only for pre-migration rows
   lat       Float // ALREADY privacy-offset coords (raw is never stored)
   lng       Float
+  intent    String // temporary allowlisted conversation intent
   busy      Boolean  @default(false) // true while in an active connection
   lastSeen  DateTime
 

@@ -1,4 +1,37 @@
-# Pulse Security Notes
+# Pulse Notes
+
+## Phase 4: Intent + Smart Match
+
+Pulse now asks each anonymous visitor to choose one temporary conversation
+intent: Talk, Listen, Advice, or Celebrate. That intent belongs only to the
+authenticated presence row, appears as lightweight map context, and disappears
+with the session. Smart Match uses the existing peer snapshot to choose a
+random, available person with the same intent, then sends the normal connection
+request rather than creating a separate connection path.
+
+This feature was chosen because it makes a sparse anonymous map feel more human
+without adding profiles, history, or identity. It gives both people a small
+amount of context before they accept a conversation, makes map markers more
+meaningful, and gives visitors a low-friction way to find a relevant peer.
+
+Important trade-offs:
+
+- Intent is deliberately broad and immutable for the life of a session. A user
+  must leave and rejoin to change it, which keeps ownership and state simple.
+- Matching happens against the most recent bounded poll snapshot. A selected
+  peer can become busy or leave before the request arrives; the existing signal
+  flow safely declines or reports that case.
+- Intent is public session metadata, like approximate coordinates and busy
+  state. It is not treated as private authentication material.
+- Random selection is client-side and intentionally unranked. There is no
+  behavioral profiling, durable preference data, or recommendation history.
+
+With more time, the next focused improvement would be an authenticated,
+server-authorized pending/connected state machine. That would strengthen both
+Smart Match and manual requests against races and unrelated control signals
+without changing the anonymous product model.
+
+## Phase 3: Security hardening
 
 Phase 3 adds authenticated anonymous sessions, bounded API inputs, protected
 mailbox access, authenticated signaling identity, authenticated cleanup, and

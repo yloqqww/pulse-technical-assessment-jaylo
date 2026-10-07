@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Map as MapboxMap, Marker } from "mapbox-gl";
+import { INTENT_DETAILS, type ConversationIntent } from "@/lib/intent";
 import type { PeerDot } from "@/lib/types";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "pk.eyJ1IjoicHVsc2UtbWFwIiwiYSI6ImNrMDBkZW1vMDAwMDAwMDAifQ.AAAAAAAAAAAAAAAAAAAAAA";
@@ -18,12 +19,16 @@ function dotColor(id: string): string {
 export default function WorldMap({
   peers,
   me,
+  myIntent,
   onPeerClick,
+  onFindMatch,
   canConnect,
 }: {
   peers: PeerDot[];
   me: { lat: number; lng: number } | null;
+  myIntent: ConversationIntent;
   onPeerClick: (id: string) => void;
+  onFindMatch: () => void;
   canConnect: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,8 +97,9 @@ export default function WorldMap({
       if (!meMarkerRef.current) {
         const el = document.createElement("div");
         el.className = "pulse-me";
-        el.title = "Your approximate location";
-        el.innerHTML = `<span class="pulse-me-label">You</span>`;
+        const label = document.createElement("span");
+        label.className = "pulse-me-label";
+        el.append(label);
         // anchor "bottom" → the pin's tip sits on the exact coordinate.
         meMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([me.lng, me.lat])
@@ -101,12 +107,18 @@ export default function WorldMap({
       } else {
         meMarkerRef.current.setLngLat([me.lng, me.lat]);
       }
+
+      const element = meMarkerRef.current.getElement();
+      element.dataset.intent = myIntent;
+      element.title = `You are here to ${INTENT_DETAILS[myIntent].label}`;
+      const label = element.querySelector(".pulse-me-label");
+      if (label) label.textContent = `You · ${INTENT_DETAILS[myIntent].label}`;
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [me, ready]);
+  }, [me, myIntent, ready]);
 
   // Reconcile markers whenever the peer list changes (or the map becomes ready).
   useEffect(() => {
@@ -140,9 +152,18 @@ export default function WorldMap({
           markers.set(peer.id, marker);
         }
         marker.getElement().dataset.busy = String(peer.busy);
+        marker.getElement().dataset.intent = peer.intent;
+        marker.getElement().dataset.intentSymbol = INTENT_DETAILS[peer.intent].symbol;
         marker.getElement().style.opacity = peer.busy ? "0.42" : "1";
-        marker.getElement().title = peer.busy ? "Currently in a conversation" : "Connect with this person";
-        marker.getElement().setAttribute("aria-label", peer.busy ? "Person is currently busy" : "Connect with this person");
+        marker.getElement().title = peer.busy
+          ? `${INTENT_DETAILS[peer.intent].label} · Currently in a conversation`
+          : `Connect · Here to ${INTENT_DETAILS[peer.intent].label}`;
+        marker.getElement().setAttribute(
+          "aria-label",
+          peer.busy
+            ? `Person here to ${INTENT_DETAILS[peer.intent].label} is currently busy`
+            : `Connect with a person here to ${INTENT_DETAILS[peer.intent].label}`,
+        );
       }
 
       // Drop markers for peers that went offline / got filtered out.
@@ -199,6 +220,29 @@ export default function WorldMap({
         <span className="font-medium text-zinc-100">{peers.length}</span>
         <span className="text-zinc-500">online now</span>
       </div>
+
+      <button
+        type="button"
+        onClick={onFindMatch}
+        disabled={!canConnect}
+        className="map-chip pressable focus-ring absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-45 sm:bottom-5 sm:right-5"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          className="h-3.5 w-3.5 text-[#74e8bd]"
+          fill="none"
+        >
+          <path
+            d="M2.5 5.25h7m0 0L7.25 3m2.25 2.25L7.25 7.5M13.5 10.75h-7m0 0L8.75 8.5M6.5 10.75 8.75 13"
+            stroke="currentColor"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Find a match
+      </button>
     </div>
   );
 }

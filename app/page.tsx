@@ -14,6 +14,11 @@ import {
   type SessionCredentials,
 } from "@/lib/api";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
+import {
+  INTENT_DETAILS,
+  pickIntentMatch,
+  type ConversationIntent,
+} from "@/lib/intent";
 import { POLL_INTERVAL_MS } from "@/lib/presence";
 import { type PeerDot, type SignalMsg } from "@/lib/types";
 
@@ -32,7 +37,9 @@ export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
   const [session, setSession] = useState<SessionCredentials | null>(null);
   const sessionRef = useRef<SessionCredentials | null>(null);
+  const [intent, setIntent] = useState<ConversationIntent | null>(null);
   const [peers, setPeers] = useState<PeerDot[]>([]);
+  const [candidatePeerId, setCandidatePeerId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -175,6 +182,30 @@ export default function Home() {
     }, REQUEST_TIMEOUT_MS);
   }
 
+  function previewConnection(peerId: string) {
+    if (connRef.current.kind !== "idle") return;
+    setCandidatePeerId(peerId);
+  }
+
+  function confirmCandidate() {
+    if (!candidatePeerId) return;
+    const peerId = candidatePeerId;
+    setCandidatePeerId(null);
+    requestConnection(peerId);
+  }
+
+  function findIntentMatch() {
+    if (connRef.current.kind !== "idle" || !intent) return;
+
+    const match = pickIntentMatch(peers, intent);
+    if (!match) {
+      showNotice(`No one is here to ${INTENT_DETAILS[intent].label} just yet.`);
+      return;
+    }
+
+    previewConnection(match.id);
+  }
+
   function cancelRequest() {
     if (connRef.current.kind === "requesting") {
       queueSignal(connRef.current.peerId, "end");
@@ -244,6 +275,7 @@ export default function Home() {
     switch (sig.type) {
       case "request": {
         if (connRef.current.kind === "idle") {
+          setCandidatePeerId(null);
           setConn({ kind: "incoming", peerId: sig.fromId });
         } else {
           queueSignal(sig.fromId, "decline");
@@ -341,11 +373,16 @@ export default function Home() {
     };
   }, [session, phase]);
 
-  async function handleReady(lat: number, lng: number) {
+  async function handleReady(
+    lat: number,
+    lng: number,
+    selectedIntent: ConversationIntent,
+  ) {
     setMyLocation({ lat, lng });
-    const credentials = await join(lat, lng);
+    const credentials = await join(lat, lng, selectedIntent);
     sessionRef.current = credentials;
     setSession(credentials);
+    setIntent(selectedIntent);
     setPhase("live");
   }
 
@@ -353,15 +390,23 @@ export default function Home() {
     return <EntryGate onReady={handleReady} />;
   }
 
+  if (!intent) return null;
+
   const inChat = conn.kind === "connecting" || conn.kind === "connected";
+  const contextualPeerId = candidatePeerId ?? ("peerId" in conn ? conn.peerId : null);
+  const contextualIntent = contextualPeerId
+    ? peers.find((peer) => peer.id === contextualPeerId)?.intent
+    : undefined;
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#07090b]">
       <WorldMap
         peers={peers}
         me={myLocation}
-        onPeerClick={requestConnection}
-        canConnect={conn.kind === "idle"}
+        myIntent={intent}
+        onPeerClick={previewConnection}
+        onFindMatch={findIntentMatch}
+        canConnect={conn.kind === "idle" && !candidatePeerId}
       />
 
       {notice && (
@@ -378,7 +423,9 @@ export default function Home() {
         <div className="map-chip ui-enter-fast absolute left-1/2 top-[max(4.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 flex -translate-x-1/2 items-center gap-3 rounded-xl py-1.5 pl-3.5 pr-1.5 text-xs text-zinc-200">
           <span className="flex items-center gap-2 whitespace-nowrap">
             <span className="locating-spinner !h-3.5 !w-3.5 !border-white/15 !border-t-[#74e8bd]" />
-            Requesting connection…
+            Requesting {contextualIntent
+              ? `someone here to ${INTENT_DETAILS[contextualIntent].label}`
+              : "connection"}…
           </span>
           <button
             onClick={cancelRequest}
@@ -392,10 +439,31 @@ export default function Home() {
       {conn.kind === "incoming" && (
         <ConnectionPrompt
           title="A stranger wants to connect"
+          subtitle={
+            contextualIntent
+              ? `This person is here to ${INTENT_DETAILS[contextualIntent].label}.`
+              : undefined
+          }
           acceptLabel="Accept"
           declineLabel="Decline"
           onAccept={acceptIncoming}
           onDecline={declineIncoming}
+        />
+      )}
+
+      {candidatePeerId && conn.kind === "idle" && (
+        <ConnectionPrompt
+          eyebrow="Intent match"
+          title="Start a conversation?"
+          subtitle={
+            contextualIntent
+              ? `This person is here to ${INTENT_DETAILS[contextualIntent].label}.`
+              : "Send a private connection request?"
+          }
+          acceptLabel="Send request"
+          declineLabel="Not now"
+          onAccept={confirmCandidate}
+          onDecline={() => setCandidatePeerId(null)}
         />
       )}
 

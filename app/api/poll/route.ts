@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { STALE_MS, SIGNAL_TTL_MS } from "@/lib/presence";
+import type { ConversationIntent } from "@/lib/intent";
 import type { PollResponse } from "@/lib/types";
 import { noStoreJson } from "@/lib/api-security";
 import { authenticateRequest } from "@/lib/session-auth";
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
       id: { not: session.id },
       lastSeen: { gte: staleCutoff },
     },
-    select: { id: true, lat: true, lng: true, busy: true },
+    select: { id: true, lat: true, lng: true, intent: true, busy: true },
     take: MAX_PEERS_PER_POLL,
   });
 
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
       id: peer.id,
       lat: peer.lat,
       lng: peer.lng,
+      intent: peer.intent as ConversationIntent,
       busy: peer.busy,
     })),
     signals: inbox.map((signal) => ({

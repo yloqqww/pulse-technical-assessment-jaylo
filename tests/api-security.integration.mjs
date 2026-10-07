@@ -21,11 +21,11 @@ async function request(path, init) {
   return { response, body };
 }
 
-async function join(lat, lng) {
+async function join(lat, lng, intent) {
   const result = await request("/api/join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lat, lng }),
+    body: JSON.stringify({ lat, lng, intent }),
   });
 
   assert.equal(result.response.status, 201);
@@ -71,10 +71,18 @@ async function leave(session, token = session.token) {
 let first;
 let second;
 let stale;
+let leaving;
 
 try {
-  first = await join(14.5995, 120.9842);
-  second = await join(14.6095, 120.9942);
+  const invalidIntent = await request("/api/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lat: 14.5995, lng: 120.9842, intent: "dating" }),
+  });
+  assert.equal(invalidIntent.response.status, 400);
+
+  first = await join(14.5995, 120.9842, "talk");
+  second = await join(14.6095, 120.9942, "talk");
 
   const wrongPoll = await poll(first, second.token);
   assert.equal(wrongPoll.response.status, 401);
@@ -105,7 +113,11 @@ try {
   const firstPoll = await poll(first);
   assert.equal(firstPoll.response.status, 200);
   assert.match(firstPoll.response.headers.get("cache-control") ?? "", /no-store/i);
-  assert.ok(firstPoll.body.peers.some((peer) => peer.id === second.id));
+  assert.ok(
+    firstPoll.body.peers.some(
+      (peer) => peer.id === second.id && peer.intent === "talk",
+    ),
+  );
 
   const validSignal = await signal(first, {
     toId: second.id,
@@ -159,11 +171,23 @@ try {
     ),
   );
 
-  stale = await join(14.6195, 121.0042);
+  stale = await join(14.6195, 121.0042, "advice");
   await new Promise((resolve) => setTimeout(resolve, 16_000));
   const cleanupPoll = await poll(first);
   assert.equal(cleanupPoll.response.status, 200);
   assert.ok(!cleanupPoll.body.peers.some((peer) => peer.id === stale.id));
+
+  leaving = await join(14.6295, 121.0142, "celebrate");
+  const beforeLeave = await poll(first);
+  assert.ok(
+    beforeLeave.body.peers.some(
+      (peer) => peer.id === leaving.id && peer.intent === "celebrate",
+    ),
+  );
+  const leaveResult = await leave(leaving);
+  assert.equal(leaveResult.response.status, 200);
+  const afterLeave = await poll(first);
+  assert.ok(!afterLeave.body.peers.some((peer) => peer.id === leaving.id));
 
   const page = await fetch(baseUrl);
   assert.equal(page.headers.get("x-content-type-options"), "nosniff");
@@ -172,11 +196,13 @@ try {
 
   console.log("Security integration checks passed:");
   console.log("- server-issued UUID and 32-byte anonymous token");
+  console.log("- intent allowlist and authenticated peer intent metadata");
   console.log("- wrong-token poll, signal, and leave rejected");
   console.log("- client-supplied fromId and self-signaling rejected");
   console.log("- authenticated signaling derives the sender identity");
   console.log("- request, accept, end, and reconnect signaling lifecycle");
   console.log("- stale presence expires from peer discovery");
+  console.log("- session intent disappears when presence leaves");
   console.log("- poll is no-store and does not expose session tokens");
   console.log("- conservative response headers are present");
 } finally {

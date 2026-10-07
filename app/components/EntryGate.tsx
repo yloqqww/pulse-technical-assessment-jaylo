@@ -1,16 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import {
+  CONVERSATION_INTENTS,
+  INTENT_DETAILS,
+  type ConversationIntent,
+} from "@/lib/intent";
 
 export default function EntryGate({
   onReady,
 }: {
-  onReady: (lat: number, lng: number) => Promise<void>;
+  onReady: (
+    lat: number,
+    lng: number,
+    intent: ConversationIntent,
+  ) => Promise<void>;
 }) {
   const [status, setStatus] = useState<"idle" | "locating" | "error">("idle");
   const [error, setError] = useState<string>("");
+  const [intent, setIntent] = useState<ConversationIntent | null>(null);
 
   function enter() {
+    if (!intent) return;
     if (!("geolocation" in navigator)) {
       setStatus("error");
       setError("Your browser doesn't support location access.");
@@ -19,7 +30,7 @@ export default function EntryGate({
     setStatus("locating");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        void onReady(pos.coords.latitude, pos.coords.longitude).catch(() => {
+        void onReady(pos.coords.latitude, pos.coords.longitude, intent).catch(() => {
           setStatus("error");
           setError("Couldn't start a secure session. Please try again.");
         });
@@ -42,7 +53,7 @@ export default function EntryGate({
     <main className="entry-shell flex flex-1 items-center justify-center px-5 py-10 text-zinc-100 sm:px-8">
       <div className="entry-orbit" aria-hidden="true" />
 
-      <section className="entry-card glass-panel w-full max-w-[440px] rounded-[24px] p-6 sm:p-8">
+      <section className="entry-card glass-panel w-full max-w-[480px] rounded-[24px] p-6 sm:p-8">
         <div className="flex items-center justify-between border-b border-white/8 pb-5">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200/15 bg-emerald-300/8">
@@ -55,7 +66,7 @@ export default function EntryGate({
           </span>
         </div>
 
-        <div className="pb-7 pt-9 text-center sm:pb-8 sm:pt-11">
+        <div className="pb-6 pt-8 text-center sm:pb-7 sm:pt-9">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-200/65">
             One world. One conversation.
           </p>
@@ -70,10 +81,54 @@ export default function EntryGate({
           </p>
         </div>
 
+        <fieldset>
+          <legend className="mb-3 flex w-full items-center justify-between text-left">
+            <span className="text-xs font-medium text-zinc-200">What brings you here?</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+              One choice
+            </span>
+          </legend>
+          <div className="grid grid-cols-2 gap-2.5">
+            {CONVERSATION_INTENTS.map((value) => {
+              const detail = INTENT_DETAILS[value];
+              const selected = intent === value;
+
+              return (
+                <label
+                  key={value}
+                  className={`intent-option pressable ${
+                    selected ? "intent-option-selected" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="conversation-intent"
+                    value={value}
+                    checked={selected}
+                    onChange={() => setIntent(value)}
+                    className="sr-only"
+                  />
+                  <span className="intent-option-mark" aria-hidden="true">
+                    {detail.symbol}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-zinc-100">
+                      {detail.label}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] leading-4 text-zinc-500">
+                      {detail.description}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
         <button
           onClick={enter}
-          disabled={status === "locating"}
-          className="focus-ring pressable flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#74e8bd] px-6 text-sm font-semibold text-[#07110d] shadow-[0_10px_30px_rgba(64,211,158,0.14)] hover:bg-[#8df0c9] disabled:cursor-wait disabled:opacity-70"
+          disabled={status === "locating" || !intent}
+          className="focus-ring pressable mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#74e8bd] px-6 text-sm font-semibold text-[#07110d] shadow-[0_10px_30px_rgba(64,211,158,0.14)] hover:bg-[#8df0c9] disabled:cursor-not-allowed disabled:opacity-45"
         >
           {status === "locating" && <span className="locating-spinner" aria-hidden="true" />}
           {status === "locating" ? "Finding your place…" : "Enter the live map"}

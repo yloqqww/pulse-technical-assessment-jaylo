@@ -3,6 +3,7 @@
 // Reusable centered prompt for "someone wants to connect" and
 // "someone wants to start video".
 export default function ConnectionPrompt({
+  eyebrow = "Incoming request",
   title,
   subtitle,
   acceptLabel,
@@ -10,6 +11,7 @@ export default function ConnectionPrompt({
   onAccept,
   onDecline,
 }: {
+  eyebrow?: string;
   title: string;
   subtitle?: string;
   acceptLabel: string;
@@ -32,7 +34,7 @@ export default function ConnectionPrompt({
           </svg>
         </div>
         <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-200/55">
-          Incoming request
+          {eyebrow}
         </p>
         <h2 id="connection-prompt-title" className="mt-2 text-xl font-semibold tracking-[-0.03em]">
           {title}

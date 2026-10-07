@@ -1,4 +1,5 @@
 // Shared types across client + API.
+import type { ConversationIntent } from "@/lib/intent";
 
 // Signal mailbox message types.
 export type SignalType =
@@ -14,6 +15,7 @@ export interface PeerDot {
   id: string;
   lat: number;
   lng: number;
+  intent: ConversationIntent;
   busy: boolean;
 }
 
