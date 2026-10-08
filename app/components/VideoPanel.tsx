@@ -121,6 +121,8 @@ export default function VideoPanel({
     }
   }, [localStream]);
 
+  const [remoteTrackVersion, setRemoteTrackVersion] = useState(0);
+
   useEffect(() => {
     const video = remoteRef.current;
     if (video && remoteStream) {
@@ -131,6 +133,45 @@ export default function VideoPanel({
         console.warn("Autoplay prevented on mobile:", err);
       });
     }
+  }, [remoteStream, remoteTrackVersion]);
+
+  useEffect(() => {
+    if (!remoteStream) return;
+    const onTrackChange = () => {
+      setRemoteTrackVersion((v) => v + 1);
+      const video = remoteRef.current;
+      if (video && video.paused) {
+        video.play().catch(() => {});
+      }
+    };
+
+    remoteStream.addEventListener("addtrack", onTrackChange);
+    remoteStream.addEventListener("removetrack", onTrackChange);
+    remoteStream.getVideoTracks().forEach((track) => {
+      track.addEventListener("unmute", onTrackChange);
+      track.addEventListener("mute", onTrackChange);
+      track.addEventListener("ended", onTrackChange);
+    });
+    remoteStream.getAudioTracks().forEach((track) => {
+      track.addEventListener("unmute", onTrackChange);
+      track.addEventListener("mute", onTrackChange);
+      track.addEventListener("ended", onTrackChange);
+    });
+
+    return () => {
+      remoteStream.removeEventListener("addtrack", onTrackChange);
+      remoteStream.removeEventListener("removetrack", onTrackChange);
+      remoteStream.getVideoTracks().forEach((track) => {
+        track.removeEventListener("unmute", onTrackChange);
+        track.removeEventListener("mute", onTrackChange);
+        track.removeEventListener("ended", onTrackChange);
+      });
+      remoteStream.getAudioTracks().forEach((track) => {
+        track.removeEventListener("unmute", onTrackChange);
+        track.removeEventListener("mute", onTrackChange);
+        track.removeEventListener("ended", onTrackChange);
+      });
+    };
   }, [remoteStream]);
 
   useEffect(() => {
@@ -252,14 +293,21 @@ export default function VideoPanel({
     remoteStream &&
       remoteStream
         .getVideoTracks()
-        .some((track) => track.enabled && track.readyState === "live"),
+        .some((track) => track.readyState !== "ended"),
   );
   const hasRemoteAudioTrack = Boolean(
     remoteStream &&
       remoteStream
         .getAudioTracks()
-        .some((track) => track.enabled && track.readyState === "live"),
+        .some((track) => track.readyState !== "ended"),
   );
+
+  const handleStageInteraction = () => {
+    const video = remoteRef.current;
+    if (video && video.paused) {
+      video.play().catch(() => {});
+    }
+  };
 
   return (
     <section
@@ -278,7 +326,11 @@ export default function VideoPanel({
         </div>
       </header>
 
-      <div className="relative flex-1 overflow-hidden">
+      <div
+        className="relative flex-1 overflow-hidden"
+        onClick={handleStageInteraction}
+        onTouchStart={handleStageInteraction}
+      >
         <video
           ref={remoteRef}
           autoPlay
@@ -378,12 +430,16 @@ export default function VideoPanel({
         </span>
         <CallControl label="Choose camera or microphone" active={deviceMenuOpen} onClick={() => setDeviceMenuOpen((open) => !open)} icon="devices" />
         <CallControl label={speechRecognition ? (captionsEnabled ? "Turn captions off" : "Turn captions on") : "Live captions unavailable in this browser"} active={captionsEnabled} disabled={!speechRecognition} onClick={toggleCaptions} icon="captions" />
-        <CallControl label={translateCaptions ? "Disable caption translation" : `Translate captions to ${language.toUpperCase()}`} active={translateCaptions} onClick={() => setTranslateCaptions((prev) => !prev)} icon="translate" />
+        {captionsEnabled && (
+          <CallControl label={translateCaptions ? "Disable caption translation" : `Translate captions to ${language.toUpperCase()}`} active={translateCaptions} onClick={() => setTranslateCaptions((prev) => !prev)} icon="translate" />
+        )}
         <span className="hidden sm:inline-flex">
           <CallControl label={pictureInPicture ? "Exit Picture-in-Picture" : "Picture-in-Picture"} active={pictureInPicture} disabled={!pictureInPictureSupported || !remoteStream} onClick={() => void togglePictureInPicture()} icon="pip" />
         </span>
         {onOpenDiagnostics && (
-          <CallControl label="Connection & TURN diagnostics" active={false} onClick={onOpenDiagnostics} icon="diagnostics" />
+          <span className="hidden sm:inline-flex">
+            <CallControl label="Connection & TURN diagnostics" active={false} onClick={onOpenDiagnostics} icon="diagnostics" />
+          </span>
         )}
         <button
           onClick={onEnd}

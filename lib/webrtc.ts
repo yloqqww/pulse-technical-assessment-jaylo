@@ -250,7 +250,7 @@ export class PeerSession {
         if (!this.remoteStream) {
           this.remoteStream = new MediaStream();
         }
-        if (!this.remoteStream.getTracks().includes(event.track)) {
+        if (!this.remoteStream.getTracks().some((t) => t.id === event.track.id)) {
           this.remoteStream.addTrack(event.track);
         }
         stream = this.remoteStream;
@@ -258,11 +258,18 @@ export class PeerSession {
         this.remoteStream = stream;
       }
 
-      event.track.onunmute = () => {
-        this.cb.onRemoteStream(stream);
+      const notify = () => {
+        if (this.closed || !this.remoteStream) return;
+        // Pass a fresh MediaStream instance so React state listeners re-render
+        this.cb.onRemoteStream(new MediaStream(this.remoteStream.getTracks()));
       };
 
-      this.cb.onRemoteStream(stream);
+      stream.onaddtrack = notify;
+      stream.onremovetrack = notify;
+      event.track.onunmute = notify;
+      event.track.onmute = notify;
+      event.track.onended = notify;
+      notify();
     };
 
     this.pc.onconnectionstatechange = () => {
@@ -481,9 +488,6 @@ export class PeerSession {
     // ─────────────────────────────────────────────
 
     if (type === "ice") {
-      // Ignore candidates belonging to an offer that we intentionally ignored.
-      if (this.ignoreOffer) return;
-
       const candidate = data as RTCIceCandidateInit;
 
       // Remote SDP must exist before ICE candidates are added.
@@ -558,6 +562,7 @@ export class PeerSession {
 
     try {
       await this.pc.setRemoteDescription(desc);
+      this.ignoreOffer = false;
     } catch (error) {
       console.error(
         "Failed to set remote description:",
@@ -797,18 +802,29 @@ export class PeerSession {
   private async acquireLocalMedia(): Promise<MediaStream> {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: {
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
         audio: true,
       });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotAllowedError") {
-        throw error;
-      }
-
+    } catch {
       try {
-        return await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch {
-        return navigator.mediaDevices.getUserMedia({ video: true });
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          throw error;
+        }
+
+        try {
+          return await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          return navigator.mediaDevices.getUserMedia({ video: true });
+        }
       }
     }
   }
