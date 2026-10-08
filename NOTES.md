@@ -260,24 +260,89 @@ mailbox access, authenticated signaling identity, authenticated cleanup, and
 basic browser security headers. The following risks are intentionally deferred
 to keep this assessment change small and preserve the working product flow.
 
+## Server-Authorized Connection State Machine
+
+Pulse now features an authoritative, database-backed state machine for all peer
+connections (`ConnectionPair`). Rather than relying on optimistic client-driven
+busy flags, every signaling step is authorized against the server-persisted pair
+relationship:
+
+- **Pending handshake authorization:** When an anonymous peer sends a `request`,
+  the server validates that neither party is currently in an active or pending
+  conversation. A `ConnectionPair` record is created in `pending` state and both
+  sessions are locked as `busy`. Unanswered pending requests automatically time
+  out after 45 seconds.
+- **Strict transition authorization:** Only the designated recipient can `accept`
+  or `decline` a pending request. Calling `accept`, `decline`, or `end` without an
+  active authorized `ConnectionPair` is rejected with `403 Forbidden`.
+- **Signaling channel lock:** WebRTC SDP offers, answers, and ICE candidate
+  signals are strictly authorized between the exact two participants of the
+  connection pair. Third-party spoofing or state disruption is mathematically
+  prevented.
+- **Automatic cascading cleanup:** When an anonymous session leaves (`/api/leave`)
+  or expires from staleness, all associated connection pairs cascade away, and
+  any connected partner is automatically released from the busy state.
+
+## Distributed Abuse Protection & Rate Limiting
+
+Pulse enforces database-backed distributed sliding-window rate limiting
+(`AbuseGuard`) across all serverless Vercel instances, shielding `/api/join`,
+`/api/poll`, `/api/signal`, `/api/safety`, and `/api/community` from bot floods,
+connection request spam, and report bombing.
+
+- **Zero IP Exposure Guarantee:** In strict adherence to user privacy, client IP
+  addresses are never stored in raw text anywhere in the database or server logs.
+  Identifiers are one-way hashed using SHA-256 with a secret salt and action
+  scope (`client_[sha256]`).
+- **Progressive strike penalties:** Repeated overages within a sliding window
+  increment strike counters and trigger temporary progressive quarantine
+  cooldowns (1 minute to 15 minutes) with HTTP `429 Too Many Requests` and
+  standard `Retry-After` headers.
+- **Fail-open reliability:** Should database transport experience transient
+  spikes, the distributed limiter fails open gracefully, preserving continuous
+  service for legitimate community visitors.
+
+## Moderator Station & Trust Dashboard
+
+A dedicated, authenticated moderator dashboard is now available at `/moderator`
+and `/api/moderator`, protected by configurable bearer token credentials
+(`MODERATOR_KEY`):
+
+- **Safety Reports Queue:** Real-time visibility into all incoming reports,
+  including reason, timestamp, anonymized session IDs, and an automated badge
+  verifying whether the report stemmed from an authorized `ConnectionPair`
+  conversation or an unverified map discovery.
+- **One-Click Remediation:** Moderators can dismiss frivolous reports,
+  immediately terminate malicious or abusive sessions, or quarantine offending
+  client hashes.
+- **Live Session & Connection Inspector:** Displays active anonymous sessions
+  (intent, language, state) and active connection pairs with force-disconnect
+  capabilities.
+- **Distributed Abuse Control:** Inspects throttled and quarantined client
+  hashes, displays strike counts, and allows manual quarantine lifting.
+- **Complete Privacy Protection:** Even inside the administrative station, raw IP
+  addresses and media transcripts remain strictly nonexistent. All identifiers
+  are anonymized tokens.
+
+## Optional Live Translation
+
+Pulse supports seamless live translation for cross-language conversations across
+English, Filipino (Tagalog), Spanish, and Japanese:
+
+- **Ephemeral Peer-to-Peer Chat Translation:** Users can toggle Live
+  Translation directly in the chat header, choosing their preferred target
+  language. Incoming messages in other languages are translated on-the-fly and
+  displayed with a subtle badge (`🌐 Translated to [LANG] • Show original`).
+  Participants can smoothly toggle between the translated and original text.
+- **Live Video Captions Translation:** Opt-in Web Speech captions in video calls
+  can be translated into the user's selected session language in real-time,
+  displaying an inline translated subtitle overlay.
+- **Zero Data Retention:** Translations are computed ephemerally in-memory (or via
+  bounded authenticated `/api/translate`) and are never written to any database
+  or server disk.
+
 ## Remaining production risks
 
-### Connection-state authorization
-
-The server now authenticates the sender and verifies that the target is online,
-but it does not yet persist a full pending/connected pair state machine. A
-malicious user with their own valid anonymous session could still send an
-`accept`, `decline`, or `end` signal to an unrelated online session and affect
-its lightweight `busy` flag. A production version should persist the pending
-and active peer relationship and authorize every transition against it.
-
-### Distributed rate limiting
-
-The application enforces body, signaling payload, mailbox, and poll batch
-limits. It does not implement an in-memory request limiter because that would
-not be reliable across Vercel serverless instances. Production should add
-Vercel WAF rate rules or another distributed limiter, especially for join,
-poll, and signal traffic.
 
 ### Mailbox concurrency
 

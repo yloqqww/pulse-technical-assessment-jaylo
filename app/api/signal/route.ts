@@ -15,6 +15,8 @@ import {
   utf8ByteLength,
 } from "@/lib/api-security";
 import { authenticateRequest } from "@/lib/session-auth";
+import { checkDistributedAbuse } from "@/lib/abuse-protection";
+import { authorizeSignalTransition } from "@/lib/connection-state";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +70,21 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: payloadError }, { status: 400 });
   }
 
+  // Enforce distributed abuse rate limiting
+  const abuse = await checkDistributedAbuse(
+    request,
+    signalType === "request" ? "signal:request" : "signal",
+  );
+  if (!abuse.allowed) {
+    return noStoreJson(
+      { error: "rate limit exceeded", retryAfter: abuse.retryAfterSeconds },
+      {
+        status: 429,
+        headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 60) },
+      },
+    );
+  }
+
   const staleCutoff = new Date(Date.now() - STALE_MS);
   if (sender.lastSeen < staleCutoff) {
     return noStoreJson({ error: "session expired" }, { status: 410 });
@@ -94,31 +111,30 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: "interaction unavailable" }, { status: 403 });
   }
 
-  if (signalType === "request" && target.busy) {
-    const delivered = await createBoundedSignal({
-      fromId: toId,
-      toId: sender.id,
-      type: "decline",
-      payload: null,
-    });
-    if (!delivered) {
-      return noStoreJson({ error: "mailbox full" }, { status: 429 });
-    }
-    return noStoreJson({ ok: true, autoDeclined: true });
-  }
+  // Authorize transition against server-persisted connection state machine
+  const authTransition = await authorizeSignalTransition({
+    senderId: sender.id,
+    targetId: toId,
+    type: signalType,
+  });
 
-  // Preserve the current lightweight busy-state behavior. Relationship-level
-  // authorization remains documented as future production work in NOTES.md.
-  if (signalType === "accept") {
-    await prisma.presence.updateMany({
-      where: { id: { in: [sender.id, toId] } },
-      data: { busy: true },
-    });
-  } else if (signalType === "decline" || signalType === "end") {
-    await prisma.presence.updateMany({
-      where: { id: { in: [sender.id, toId] } },
-      data: { busy: false },
-    });
+  if (!authTransition.allowed) {
+    if (authTransition.autoDeclined) {
+      const delivered = await createBoundedSignal({
+        fromId: toId,
+        toId: sender.id,
+        type: "decline",
+        payload: null,
+      });
+      if (!delivered) {
+        return noStoreJson({ error: "mailbox full" }, { status: 429 });
+      }
+      return noStoreJson({ ok: true, autoDeclined: true });
+    }
+    return noStoreJson(
+      { error: authTransition.error ?? "unauthorized connection transition" },
+      { status: 403 },
+    );
   }
 
   const delivered = await createBoundedSignal({

@@ -12,6 +12,7 @@ import {
   noStoreJson,
   readLimitedJsonObject,
 } from "@/lib/api-security";
+import { checkDistributedAbuse } from "@/lib/abuse-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,17 @@ export const dynamic = "force-dynamic";
 // The server creates a public session id and a one-time private token. Only the
 // token hash and privacy-offset coordinates are stored.
 export async function POST(request: NextRequest) {
+  const abuse = await checkDistributedAbuse(request, "join");
+  if (!abuse.allowed) {
+    return noStoreJson(
+      { error: "rate limit exceeded", retryAfter: abuse.retryAfterSeconds },
+      {
+        status: 429,
+        headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 60) },
+      },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await readLimitedJsonObject(request, MAX_JOIN_BODY_BYTES);

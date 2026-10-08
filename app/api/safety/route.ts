@@ -11,6 +11,7 @@ import {
 } from "@/lib/api-security";
 import { authenticateRequest } from "@/lib/session-auth";
 import { isSafetyAction, isSafetyReportReason } from "@/lib/safety";
+import { checkDistributedAbuse } from "@/lib/abuse-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,18 @@ const REPORT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export async function POST(request: NextRequest) {
   const session = await authenticateRequest(request);
   if (!session) return noStoreJson({ error: "unauthorized" }, { status: 401 });
+
+  const abuse = await checkDistributedAbuse(request, "safety");
+  if (!abuse.allowed) {
+    return noStoreJson(
+      { error: "rate limit exceeded", retryAfter: abuse.retryAfterSeconds },
+      {
+        status: 429,
+        headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 60) },
+      },
+    );
+  }
+
 
   let body: Record<string, unknown>;
   try {
@@ -76,6 +89,19 @@ export async function POST(request: NextRequest) {
     await tx.presence.updateMany({
       where: { id: { in: [session.id, targetId] } },
       data: { busy: false },
+    });
+    await tx.connectionPair.updateMany({
+      where: {
+        status: { in: ["pending", "connected"] },
+        OR: [
+          { initiatorId: session.id, receiverId: targetId },
+          { initiatorId: targetId, receiverId: session.id },
+        ],
+      },
+      data: {
+        status: "terminated",
+        terminatedAt: now,
+      },
     });
 
     if (action === "report" && reportReason) {

@@ -440,14 +440,15 @@ export async function testIceConnectivity(
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           const parsed = parseIceCandidateString(event.candidate.candidate);
+          const candObj = event.candidate as unknown as Record<string, unknown>;
           const candidate: CandidateInfo = {
             id: event.candidate.sdpMid ?? undefined,
-            type: (event.candidate.type as CandidateInfo["type"]) ?? parsed.type ?? "unknown",
-            protocol: (event.candidate.protocol as CandidateInfo["protocol"]) ?? parsed.protocol ?? "unknown",
-            address: maskIpAddress(event.candidate.address ?? parsed.address),
-            port: event.candidate.port ?? parsed.port,
-            tcpType: event.candidate.tcpType ?? undefined,
-            url: event.candidate.url ?? undefined,
+            type: ((candObj.type as string) as CandidateInfo["type"]) ?? parsed.type ?? "unknown",
+            protocol: ((candObj.protocol as string) as CandidateInfo["protocol"]) ?? parsed.protocol ?? "unknown",
+            address: maskIpAddress((candObj.address as string) ?? parsed.address),
+            port: (candObj.port as number) ?? parsed.port,
+            tcpType: (candObj.tcpType as CandidateInfo["tcpType"]) ?? undefined,
+            url: ((candObj.url ?? candObj.serverUrl) as string) ?? undefined,
           };
           gatheredCandidates.push(candidate);
         } else {

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LANGUAGE_DETAILS, type SessionLanguage } from "@/lib/language";
+import { translateText, type SupportedLanguage } from "@/lib/translation";
+
 
 type DeviceKind = "audioinput" | "videoinput";
 
@@ -74,6 +76,8 @@ export default function VideoPanel({
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [localCaption, setLocalCaption] = useState("");
   const [pictureInPicture, setPictureInPicture] = useState(false);
+  const [translateCaptions, setTranslateCaptions] = useState(false);
+  const [translatedRemoteCaption, setTranslatedRemoteCaption] = useState("");
 
   const speechRecognition = getSpeechRecognition();
   const pictureInPictureSupported =
@@ -81,6 +85,22 @@ export default function VideoPanel({
     document.pictureInPictureEnabled &&
     typeof HTMLVideoElement !== "undefined" &&
     "requestPictureInPicture" in HTMLVideoElement.prototype;
+
+  useEffect(() => {
+    if (!translateCaptions || !remoteCaption?.trim()) return;
+    let cancelled = false;
+    const target = (language as SupportedLanguage) || "en";
+    void translateText(remoteCaption.trim(), target).then((res) => {
+      if (!cancelled) {
+        setTranslatedRemoteCaption(res.translatedText);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [translateCaptions, remoteCaption, language]);
+
+
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -271,8 +291,12 @@ export default function VideoPanel({
           <div className="pointer-events-none absolute inset-x-4 bottom-40 z-10 mx-auto flex max-w-2xl flex-col items-center gap-1 text-center sm:bottom-8">
             {remoteCaption && (
               <p className="rounded-lg bg-black/75 px-3 py-1.5 text-sm leading-5 text-white shadow-lg">
-                <span className="mr-1.5 text-[10px] uppercase tracking-wider text-emerald-200">Stranger</span>
-                {remoteCaption}
+                <span className="mr-1.5 text-[10px] uppercase tracking-wider text-emerald-200">
+                  {translateCaptions ? "Stranger (Translated)" : "Stranger"}
+                </span>
+                {translateCaptions && translatedRemoteCaption
+                  ? translatedRemoteCaption
+                  : remoteCaption}
               </p>
             )}
             {localCaption && captionsEnabled && (
@@ -283,6 +307,7 @@ export default function VideoPanel({
             )}
           </div>
         )}
+
 
         {deviceMenuOpen && (
           <div className="ui-enter-fast absolute bottom-40 left-1/2 z-20 w-[min(92vw,360px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#101416]/98 p-3 shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:bottom-20">
@@ -324,6 +349,7 @@ export default function VideoPanel({
         <CallControl label={sharingScreen ? "Stop sharing" : "Share screen"} active={sharingScreen} onClick={onToggleScreenShare} icon="screen" />
         <CallControl label="Choose camera or microphone" active={deviceMenuOpen} onClick={() => setDeviceMenuOpen((open) => !open)} icon="devices" />
         <CallControl label={speechRecognition ? (captionsEnabled ? "Turn captions off" : "Turn captions on") : "Live captions unavailable in this browser"} active={captionsEnabled} disabled={!speechRecognition} onClick={toggleCaptions} icon="captions" />
+        <CallControl label={translateCaptions ? "Disable caption translation" : `Translate captions to ${language.toUpperCase()}`} active={translateCaptions} onClick={() => setTranslateCaptions((prev) => !prev)} icon="translate" />
         <CallControl label={pictureInPicture ? "Exit Picture-in-Picture" : "Picture-in-Picture"} active={pictureInPicture} disabled={!pictureInPictureSupported || !remoteStream} onClick={() => void togglePictureInPicture()} icon="pip" />
         {onOpenDiagnostics && (
           <CallControl label="Connection & TURN diagnostics" active={false} onClick={onOpenDiagnostics} icon="diagnostics" />
@@ -384,6 +410,7 @@ type CallIconKind =
   | "screen"
   | "devices"
   | "captions"
+  | "translate"
   | "pip"
   | "diagnostics";
 
@@ -419,6 +446,15 @@ function CallControl({
 }
 
 function CallIcon({ kind }: { kind: CallIconKind }) {
+  if (kind === "translate") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2.5 10h15M10 2.5a11 11 0 0 1 0 15 11 11 0 0 1 0-15" stroke="currentColor" strokeWidth="1.3" />
+      </svg>
+    );
+  }
+
   if (kind === "diagnostics") {
     return (
       <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none">

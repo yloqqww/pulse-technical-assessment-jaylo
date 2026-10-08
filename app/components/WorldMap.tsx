@@ -222,7 +222,19 @@ export default function WorldMap({
               <span className="sm:hidden">Diagnostics</span>
             </button>
           )}
+          <a
+            href="/moderator"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Moderator Station"
+            title="Moderator station & safety control"
+            className="map-chip pressable flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-[11px] font-medium text-zinc-400 hover:text-white"
+          >
+            <span className="text-xs">🛡️</span>
+            <span className="hidden md:inline">Moderator</span>
+          </a>
         </div>
+
         <div
           className="map-chip flex h-10 items-center gap-2 rounded-xl px-3 text-[10px] text-zinc-400 sm:px-3.5 sm:text-[11px]"
           title="Anonymous appreciation shared today"

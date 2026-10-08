@@ -15,6 +15,7 @@ import {
   readLimitedJsonObject,
 } from "@/lib/api-security";
 import { authenticateRequest } from "@/lib/session-auth";
+import { checkDistributedAbuse } from "@/lib/abuse-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,10 +29,22 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const abuse = await checkDistributedAbuse(request, "thanks");
+  if (!abuse.allowed) {
+    return noStoreJson(
+      { error: "rate limit exceeded", retryAfter: abuse.retryAfterSeconds },
+      {
+        status: 429,
+        headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 60) },
+      },
+    );
+  }
+
   const session = await authenticateRequest(request);
   if (!session) {
     return noStoreJson({ error: "unauthorized" }, { status: 401 });
   }
+
 
   let body: Record<string, unknown>;
   try {

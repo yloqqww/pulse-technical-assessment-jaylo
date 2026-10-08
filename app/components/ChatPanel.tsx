@@ -6,6 +6,12 @@ import {
   type ChatReaction,
   type PeerReply,
 } from "@/lib/webrtc";
+import {
+  translateText,
+  type SupportedLanguage,
+  SUPPORTED_TRANSLATION_LANGUAGES,
+} from "@/lib/translation";
+
 
 export interface ChatMessage {
   id: number;
@@ -61,6 +67,11 @@ export default function ChatPanel({
   const [composerError, setComposerError] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [reactionTargetId, setReactionTargetId] = useState<number | null>(null);
+  const [translateEnabled, setTranslateEnabled] = useState(false);
+  const [targetLang, setTargetLang] = useState<SupportedLanguage>("en");
+  const [translations, setTranslations] = useState<
+    Record<string, { translated: string; original: string; showOriginal: boolean }>
+  >({});
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -71,6 +82,46 @@ export default function ChatPanel({
   const lastTypingSentAtRef = useRef(0);
   const onTypingChangeRef = useRef(onTypingChange);
   onTypingChangeRef.current = onTypingChange;
+
+  useEffect(() => {
+    if (!translateEnabled) return;
+    const untranslated = messages.filter(
+      (m) => !m.mine && !m.system && m.text && m.wireId && !translations[m.wireId],
+    );
+    if (untranslated.length === 0) return;
+
+    for (const msg of untranslated) {
+      if (!msg.text || !msg.wireId) continue;
+      const wireId = msg.wireId;
+      const textToTranslate = msg.text;
+      void translateText(textToTranslate, targetLang).then((res) => {
+        setTranslations((prev) => ({
+          ...prev,
+          [wireId]: {
+            translated: res.translatedText,
+            original: textToTranslate,
+            showOriginal: false,
+          },
+        }));
+      });
+    }
+  }, [messages, translateEnabled, targetLang, translations]);
+
+  function cycleTranslation() {
+    if (!translateEnabled) {
+      setTranslateEnabled(true);
+      setTargetLang("en");
+    } else if (targetLang === "en") {
+      setTargetLang("fil");
+    } else if (targetLang === "fil") {
+      setTargetLang("es");
+    } else if (targetLang === "es") {
+      setTargetLang("ja");
+    } else {
+      setTranslateEnabled(false);
+    }
+  }
+
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "auto" });
@@ -235,6 +286,29 @@ export default function ChatPanel({
             </button>
           )}
           <button
+            type="button"
+            onClick={cycleTranslation}
+            aria-label="Live translation toggle"
+            title={
+              translateEnabled
+                ? `Translating to ${SUPPORTED_TRANSLATION_LANGUAGES[targetLang].label} (Click to cycle)`
+                : "Enable live translation"
+            }
+            className={`focus-ring pressable flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
+              translateEnabled
+                ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300"
+                : "border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white"
+            }`}
+          >
+            <span>🌐</span>
+            <span className="hidden sm:inline">
+              {translateEnabled
+                ? `${SUPPORTED_TRANSLATION_LANGUAGES[targetLang].flag} ${targetLang.toUpperCase()}`
+                : "Translate"}
+            </span>
+          </button>
+
+          <button
             onClick={onStartVideo}
             disabled={!connected || videoBusy}
             aria-label="Start video call"
@@ -298,10 +372,43 @@ export default function ChatPanel({
                 {m.replyTo && <ReplyPreview reply={m.replyTo} />}
                 {m.attachment ? (
                   <AttachmentMessage attachment={m.attachment} />
+                ) : translations[m.wireId ?? ""] && !translations[m.wireId ?? ""].showOriginal ? (
+                  <div>
+                    <p>{translations[m.wireId ?? ""].translated}</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTranslations((prev) => ({
+                          ...prev,
+                          [m.wireId!]: { ...prev[m.wireId!], showOriginal: true },
+                        }))
+                      }
+                      className="mt-1 block text-[10px] text-cyan-300/80 underline decoration-cyan-300/40 hover:text-cyan-200"
+                    >
+                      🌐 Translated ({targetLang.toUpperCase()}) • Show original
+                    </button>
+                  </div>
                 ) : (
-                  m.text
+                  <div>
+                    <p>{m.text}</p>
+                    {translations[m.wireId ?? ""] && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setTranslations((prev) => ({
+                            ...prev,
+                            [m.wireId!]: { ...prev[m.wireId!], showOriginal: false },
+                          }))
+                        }
+                        className="mt-1 block text-[10px] text-zinc-400 underline decoration-zinc-500/40 hover:text-zinc-200"
+                      >
+                        🌐 Show translation
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
+
               {m.reactions && <ReactionSummary reactions={m.reactions} mine={m.mine} />}
               {m.wireId && (
                 <div className={`mt-1 flex items-center gap-1 ${m.mine ? "justify-end" : "justify-start"}`}>

@@ -21,10 +21,30 @@ model Presence {
   busy           Boolean        @default(false) // true while in an active connection
   lastSeen       DateTime
   thanksGivenAt  DateTime? // temporary anti-abuse marker; deleted with the session
-  blocksCreated  SessionBlock[] @relation("Blocker")
-  blocksReceived SessionBlock[] @relation("Blocked")
+  blocksCreated        SessionBlock[]   @relation("Blocker")
+  blocksReceived       SessionBlock[]   @relation("Blocked")
+  initiatedConnections ConnectionPair[] @relation("ConnectionInitiator")
+  receivedConnections  ConnectionPair[] @relation("ConnectionReceiver")
 
   @@index([lastSeen])
+}
+
+model ConnectionPair {
+  id           String    @id @default(uuid())
+  initiatorId  String
+  receiverId   String
+  status       String    // "pending" | "connected" | "terminated"
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  connectedAt  DateTime?
+  terminatedAt DateTime?
+
+  initiator    Presence  @relation("ConnectionInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  receiver     Presence  @relation("ConnectionReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([initiatorId, status])
+  @@index([receiverId, status])
+  @@index([createdAt])
 }
 
 model SessionBlock {
@@ -39,16 +59,44 @@ model SessionBlock {
 }
 
 model SafetyReport {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   reporterSessionId String
   reportedSessionId String
   reason            String
-  createdAt         DateTime @default(now())
+  status            String    @default("pending") // "pending" | "dismissed" | "actioned"
+  actionTaken       String?   // null | "session_terminated" | "client_quarantined"
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
   expiresAt         DateTime
 
   @@unique([reporterSessionId, reportedSessionId])
   @@index([reportedSessionId])
   @@index([expiresAt])
+  @@index([status])
+}
+
+model AbuseGuard {
+  id           String    @id @default(uuid())
+  targetHash   String    @unique // SHA-256 hash of client token/IP + action scope
+  action       String    // "join" | "poll" | "signal" | "safety" | "thanks"
+  count        Int       @default(1)
+  windowStart  DateTime  @default(now())
+  strikes      Int       @default(0)
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([targetHash])
+  @@index([blockedUntil])
+}
+
+model ModeratorAction {
+  id        String   @id @default(uuid())
+  action    String   // "terminate_session" | "dismiss_report" | "quarantine_client" | "clear_quarantine"
+  targetId  String?  // anonymized session id or client hash snippet
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model CommunityPulseDaily {
@@ -73,3 +121,4 @@ model Signal {
   @@index([fromId])
   @@index([createdAt])
 }
+

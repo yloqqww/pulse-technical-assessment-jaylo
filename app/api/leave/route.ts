@@ -34,10 +34,29 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: "unauthorized" }, { status: 401 });
   }
 
+  // Free any connected partner before deleting this presence
+  const activePair = await prisma.connectionPair.findFirst({
+    where: {
+      status: { in: ["pending", "connected"] },
+      OR: [{ initiatorId: session.id }, { receiverId: session.id }],
+    },
+  });
+  if (activePair) {
+    const partnerId =
+      activePair.initiatorId === session.id
+        ? activePair.receiverId
+        : activePair.initiatorId;
+    await prisma.presence.updateMany({
+      where: { id: partnerId },
+      data: { busy: false },
+    });
+  }
+
   await prisma.signal.deleteMany({
     where: { OR: [{ toId: session.id }, { fromId: session.id }] },
   });
   await prisma.presence.delete({ where: { id: session.id } });
 
   return noStoreJson({ ok: true });
+
 }

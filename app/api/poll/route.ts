@@ -6,6 +6,8 @@ import type { SessionLanguage } from "@/lib/language";
 import type { PollResponse } from "@/lib/types";
 import { noStoreJson } from "@/lib/api-security";
 import { authenticateRequest } from "@/lib/session-auth";
+import { checkDistributedAbuse, cleanupExpiredAbuseRecords } from "@/lib/abuse-protection";
+import { PENDING_TIMEOUT_MS } from "@/lib/connection-state";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,10 +17,22 @@ const MAX_SIGNALS_PER_POLL = 128;
 
 // GET /api/poll — authenticated heartbeat, map snapshot, and mailbox drain.
 export async function GET(request: NextRequest) {
+  const abuse = await checkDistributedAbuse(request, "poll");
+  if (!abuse.allowed) {
+    return noStoreJson(
+      { error: "rate limit exceeded", retryAfter: abuse.retryAfterSeconds },
+      {
+        status: 429,
+        headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 60) },
+      },
+    );
+  }
+
   const session = await authenticateRequest(request);
   if (!session) {
     return noStoreJson({ error: "unauthorized" }, { status: 401 });
   }
+
 
   const now = Date.now();
   const staleCutoff = new Date(now - STALE_MS);
@@ -31,6 +45,21 @@ export async function GET(request: NextRequest) {
 
   await prisma.presence.deleteMany({ where: { lastSeen: { lt: staleCutoff } } });
   await prisma.signal.deleteMany({ where: { createdAt: { lt: signalCutoff } } });
+  await prisma.connectionPair.updateMany({
+    where: {
+      status: "pending",
+      createdAt: { lt: new Date(now - PENDING_TIMEOUT_MS) },
+    },
+    data: {
+      status: "terminated",
+      terminatedAt: new Date(now),
+    },
+  });
+
+  if (Math.random() < 0.05) {
+    void cleanupExpiredAbuseRecords();
+  }
+
 
   const blocks = await prisma.sessionBlock.findMany({
     where: { OR: [{ blockerId: session.id }, { blockedId: session.id }] },
