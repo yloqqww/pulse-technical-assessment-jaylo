@@ -112,14 +112,24 @@ export default function VideoPanel({
   }, [callStartedAt]);
 
   useEffect(() => {
-    if (localRef.current && localRef.current.srcObject !== localStream) {
-      localRef.current.srcObject = localStream;
+    const video = localRef.current;
+    if (video && localStream) {
+      if (video.srcObject !== localStream) {
+        video.srcObject = localStream;
+      }
+      video.play().catch(() => {});
     }
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteRef.current && remoteRef.current.srcObject !== remoteStream) {
-      remoteRef.current.srcObject = remoteStream;
+    const video = remoteRef.current;
+    if (video && remoteStream) {
+      if (video.srcObject !== remoteStream) {
+        video.srcObject = remoteStream;
+      }
+      video.play().catch((err) => {
+        console.warn("Autoplay prevented on mobile:", err);
+      });
     }
   }, [remoteStream]);
 
@@ -238,6 +248,19 @@ export default function VideoPanel({
   const microphones = devices.filter((device) => device.kind === "audioinput");
   const cameras = devices.filter((device) => device.kind === "videoinput");
 
+  const hasRemoteVideoTrack = Boolean(
+    remoteStream &&
+      remoteStream
+        .getVideoTracks()
+        .some((track) => track.enabled && track.readyState === "live"),
+  );
+  const hasRemoteAudioTrack = Boolean(
+    remoteStream &&
+      remoteStream
+        .getAudioTracks()
+        .some((track) => track.enabled && track.readyState === "live"),
+  );
+
   return (
     <section
       aria-label="Video call"
@@ -262,14 +285,18 @@ export default function VideoPanel({
           playsInline
           className="h-full w-full bg-[#0a0d0f] object-cover"
         />
-        {!remoteStream && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        {!hasRemoteVideoTrack && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
             <div className="waiting-orbit relative" aria-hidden="true" />
-            <p className="mt-5 text-sm font-medium text-zinc-300">
-              Waiting for their camera
+            <p className="mt-5 text-sm font-semibold text-zinc-200">
+              {hasRemoteAudioTrack
+                ? "Voice connected · Loading camera…"
+                : "Connecting private video…"}
             </p>
-            <p className="mt-1.5 text-xs text-zinc-600">
-              The connection is already private.
+            <p className="mt-1.5 text-xs text-zinc-500 max-w-[280px]">
+              {hasRemoteAudioTrack
+                ? "Audio is live. Waiting for their camera feed."
+                : "Encrypted peer-to-peer WebRTC connection established."}
             </p>
           </div>
         )}
@@ -279,16 +306,16 @@ export default function VideoPanel({
           playsInline
           muted
           aria-label="Your camera preview"
-          className="absolute bottom-36 right-3 h-36 w-24 rounded-2xl border border-white/15 bg-[#111719] object-cover shadow-[0_16px_50px_rgba(0,0,0,0.45)] sm:bottom-6 sm:right-6 sm:h-44 sm:w-32"
+          className="absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] right-3.5 h-32 w-24 rounded-2xl border border-white/20 bg-[#111719] object-cover shadow-[0_16px_40px_rgba(0,0,0,0.6)] sm:top-auto sm:bottom-6 sm:right-6 sm:h-44 sm:w-32 z-20"
         />
         {!cameraEnabled && !sharingScreen && (
-          <div className="absolute bottom-36 right-3 grid h-36 w-24 place-items-center rounded-2xl border border-white/10 bg-[#111719] text-[10px] font-medium text-zinc-500 sm:bottom-6 sm:right-6 sm:h-44 sm:w-32">
+          <div className="absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] right-3.5 grid h-32 w-24 place-items-center rounded-2xl border border-white/10 bg-[#111719] text-[10px] font-medium text-zinc-500 shadow-[0_16px_40px_rgba(0,0,0,0.6)] sm:top-auto sm:bottom-6 sm:right-6 sm:h-44 sm:w-32 z-20">
             Camera off
           </div>
         )}
 
         {(remoteCaption || localCaption) && (
-          <div className="pointer-events-none absolute inset-x-4 bottom-40 z-10 mx-auto flex max-w-2xl flex-col items-center gap-1 text-center sm:bottom-8">
+          <div className="pointer-events-none absolute inset-x-4 bottom-24 z-10 mx-auto flex max-w-2xl flex-col items-center gap-1 text-center sm:bottom-20">
             {remoteCaption && (
               <p className="rounded-lg bg-black/75 px-3 py-1.5 text-sm leading-5 text-white shadow-lg">
                 <span className="mr-1.5 text-[10px] uppercase tracking-wider text-emerald-200">
@@ -310,7 +337,7 @@ export default function VideoPanel({
 
 
         {deviceMenuOpen && (
-          <div className="ui-enter-fast absolute bottom-40 left-1/2 z-20 w-[min(92vw,360px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#101416]/98 p-3 shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:bottom-20">
+          <div className="ui-enter-fast absolute bottom-24 left-1/2 z-40 w-[min(92vw,360px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#101416]/98 p-3 shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:bottom-20">
             <div className="flex items-center justify-between px-1 pb-2">
               <p className="text-xs font-semibold text-zinc-200">Call devices</p>
               <button
@@ -343,14 +370,18 @@ export default function VideoPanel({
         )}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap justify-center gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10 sm:gap-3 sm:pb-6">
+      <div className="absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-center gap-2 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-8 sm:gap-3 sm:pb-6">
         <CallControl label={microphoneEnabled ? "Mute" : "Unmute"} active={!microphoneEnabled} onClick={onToggleMicrophone} icon={microphoneEnabled ? "mic" : "mic-off"} />
         <CallControl label={cameraEnabled ? "Camera off" : "Camera on"} active={!cameraEnabled} onClick={onToggleCamera} icon={cameraEnabled ? "camera" : "camera-off"} />
-        <CallControl label={sharingScreen ? "Stop sharing" : "Share screen"} active={sharingScreen} onClick={onToggleScreenShare} icon="screen" />
+        <span className="hidden sm:inline-flex">
+          <CallControl label={sharingScreen ? "Stop sharing" : "Share screen"} active={sharingScreen} onClick={onToggleScreenShare} icon="screen" />
+        </span>
         <CallControl label="Choose camera or microphone" active={deviceMenuOpen} onClick={() => setDeviceMenuOpen((open) => !open)} icon="devices" />
         <CallControl label={speechRecognition ? (captionsEnabled ? "Turn captions off" : "Turn captions on") : "Live captions unavailable in this browser"} active={captionsEnabled} disabled={!speechRecognition} onClick={toggleCaptions} icon="captions" />
         <CallControl label={translateCaptions ? "Disable caption translation" : `Translate captions to ${language.toUpperCase()}`} active={translateCaptions} onClick={() => setTranslateCaptions((prev) => !prev)} icon="translate" />
-        <CallControl label={pictureInPicture ? "Exit Picture-in-Picture" : "Picture-in-Picture"} active={pictureInPicture} disabled={!pictureInPictureSupported || !remoteStream} onClick={() => void togglePictureInPicture()} icon="pip" />
+        <span className="hidden sm:inline-flex">
+          <CallControl label={pictureInPicture ? "Exit Picture-in-Picture" : "Picture-in-Picture"} active={pictureInPicture} disabled={!pictureInPictureSupported || !remoteStream} onClick={() => void togglePictureInPicture()} icon="pip" />
+        </span>
         {onOpenDiagnostics && (
           <CallControl label="Connection & TURN diagnostics" active={false} onClick={onOpenDiagnostics} icon="diagnostics" />
         )}
@@ -358,7 +389,7 @@ export default function VideoPanel({
           onClick={onEnd}
           aria-label="End video call"
           title="End call"
-          className="focus-ring pressable flex h-12 w-12 items-center justify-center rounded-full border border-red-200/15 bg-red-500 text-white shadow-[0_12px_35px_rgba(239,68,68,0.18)] hover:bg-red-400"
+          className="focus-ring pressable flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-red-200/15 bg-red-500 text-white shadow-[0_12px_35px_rgba(239,68,68,0.25)] hover:bg-red-400"
         >
           <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4" fill="none">
             <path d="M3.5 7.5c3.5-2.3 7.5-2.3 11 0l-1.25 3-2.15-.9.2-1.35a7.9 7.9 0 0 0-4.6 0l.2 1.35-2.15.9-1.25-3Z" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
@@ -434,7 +465,7 @@ function CallControl({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`focus-ring pressable flex h-12 w-12 items-center justify-center rounded-full border text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30 ${
+      className={`focus-ring pressable flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border text-zinc-100 disabled:cursor-not-allowed disabled:opacity-30 ${
         active
           ? "border-white/18 bg-white/18"
           : "border-white/10 bg-black/45 hover:bg-white/12"

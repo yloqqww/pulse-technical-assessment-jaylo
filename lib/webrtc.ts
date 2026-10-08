@@ -179,6 +179,7 @@ export class PeerSession {
 
   private localStream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
   private closed = false;
 
   private incomingAttachments = new Map<
@@ -242,9 +243,26 @@ export class PeerSession {
       }
     };
 
-    // Receive remote media.
-    this.pc.ontrack = ({ streams }) => {
-      this.cb.onRemoteStream(streams[0] ?? null);
+    // Receive remote media with robust mobile stream assembly.
+    this.pc.ontrack = (event) => {
+      let stream = event.streams[0];
+      if (!stream) {
+        if (!this.remoteStream) {
+          this.remoteStream = new MediaStream();
+        }
+        if (!this.remoteStream.getTracks().includes(event.track)) {
+          this.remoteStream.addTrack(event.track);
+        }
+        stream = this.remoteStream;
+      } else {
+        this.remoteStream = stream;
+      }
+
+      event.track.onunmute = () => {
+        this.cb.onRemoteStream(stream);
+      };
+
+      this.cb.onRemoteStream(stream);
     };
 
     this.pc.onconnectionstatechange = () => {
@@ -504,6 +522,15 @@ export class PeerSession {
 
     if (this.ignoreOffer) {
       return;
+    }
+
+    if (offerCollision) {
+      // The polite peer must rollback its pending local offer before applying the remote offer
+      try {
+        await this.pc.setLocalDescription({ type: "rollback" });
+      } catch (err) {
+        console.warn("Offer collision rollback warning:", err);
+      }
     }
 
     /*
@@ -930,6 +957,7 @@ export class PeerSession {
     }
 
     this.localStream = null;
+    this.remoteStream = null;
     this.cb.onLocalStream(null);
   }
 
@@ -939,6 +967,7 @@ export class PeerSession {
     this.closed = true;
 
     this.stopVideo();
+    this.remoteStream = null;
 
     this.pendingCandidates = [];
     this.incomingAttachments.clear();

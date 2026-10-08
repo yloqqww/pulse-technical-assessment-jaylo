@@ -697,6 +697,12 @@ export default function Home() {
   }
 
   function openCallWindow() {
+    // On mobile devices and touch screens, always keep the call in the current viewport
+    if (typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window)) {
+      updateCallWindow(null);
+      return;
+    }
+
     const existing = callWindowRef.current;
     if (existing && !existing.closed) {
       existing.focus();
