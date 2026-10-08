@@ -1,0 +1,1 @@
+ALTER TABLE "Presence" ADD COLUMN "language" TEXT NOT NULL DEFAULT 'en';

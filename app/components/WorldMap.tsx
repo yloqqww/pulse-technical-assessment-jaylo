@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Map as MapboxMap, Marker } from "mapbox-gl";
 import { INTENT_DETAILS, type ConversationIntent } from "@/lib/intent";
+import { LANGUAGE_DETAILS } from "@/lib/language";
 import type { PeerDot } from "@/lib/types";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "pk.eyJ1IjoicHVsc2UtbWFwIiwiYSI6ImNrMDBkZW1vMDAwMDAwMDAifQ.AAAAAAAAAAAAAAAAAAAAAA";
@@ -23,6 +24,8 @@ export default function WorldMap({
   onPeerClick,
   onFindMatch,
   canConnect,
+  communityThanks,
+  onOpenDiagnostics,
 }: {
   peers: PeerDot[];
   me: { lat: number; lng: number } | null;
@@ -30,6 +33,8 @@ export default function WorldMap({
   onPeerClick: (id: string) => void;
   onFindMatch: () => void;
   canConnect: boolean;
+  communityThanks: number;
+  onOpenDiagnostics?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -153,6 +158,7 @@ export default function WorldMap({
         }
         marker.getElement().dataset.busy = String(peer.busy);
         marker.getElement().dataset.intent = peer.intent;
+        marker.getElement().dataset.language = peer.language;
         marker.getElement().dataset.intentSymbol = INTENT_DETAILS[peer.intent].symbol;
         marker.getElement().style.opacity = peer.busy ? "0.42" : "1";
         marker.getElement().title = peer.busy
@@ -161,8 +167,8 @@ export default function WorldMap({
         marker.getElement().setAttribute(
           "aria-label",
           peer.busy
-            ? `Person here to ${INTENT_DETAILS[peer.intent].label} is currently busy`
-            : `Connect with a person here to ${INTENT_DETAILS[peer.intent].label}`,
+            ? `${LANGUAGE_DETAILS[peer.language].nativeLabel} speaker here to ${INTENT_DETAILS[peer.intent].label} is currently busy`
+            : `Connect with a ${LANGUAGE_DETAILS[peer.language].nativeLabel} speaker here to ${INTENT_DETAILS[peer.intent].label}`,
         );
       }
 
@@ -196,16 +202,37 @@ export default function WorldMap({
       )}
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
-        <div className="map-chip pointer-events-auto flex h-10 items-center gap-2.5 rounded-xl px-3.5 text-sm font-semibold tracking-[-0.02em] text-white">
-          <span className="h-2 w-2 rounded-full bg-[#74e8bd] shadow-[0_0_12px_rgba(116,232,189,0.65)]" aria-hidden="true" />
-          Pulse
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="map-chip flex h-10 items-center gap-2.5 rounded-xl px-3.5 text-sm font-semibold tracking-[-0.02em] text-white">
+            <span className="h-2 w-2 rounded-full bg-[#74e8bd] shadow-[0_0_12px_rgba(116,232,189,0.65)]" aria-hidden="true" />
+            Pulse
+          </div>
+          {onOpenDiagnostics && (
+            <button
+              type="button"
+              onClick={onOpenDiagnostics}
+              aria-label="Open Network & TURN Diagnostics"
+              title="Network & TURN diagnostics"
+              className="map-chip pressable flex h-10 items-center gap-2 rounded-xl px-3 text-[11px] font-medium text-zinc-300 hover:text-white"
+            >
+              <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 text-[#74e8bd]" fill="none">
+                <path d="M2.5 10.5h2.5l2-5 2.5 8 2-4h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="hidden sm:inline">Network & TURN</span>
+              <span className="sm:hidden">Diagnostics</span>
+            </button>
+          )}
         </div>
-        <div className="map-chip hidden h-10 items-center gap-2 rounded-xl px-3.5 text-[11px] text-zinc-400 sm:flex">
+        <div
+          className="map-chip flex h-10 items-center gap-2 rounded-xl px-3 text-[10px] text-zinc-400 sm:px-3.5 sm:text-[11px]"
+          title="Anonymous appreciation shared today"
+        >
           <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
-            <path d="M8 1.75 13 4v3.7c0 3.1-2.1 5.4-5 6.55-2.9-1.15-5-3.45-5-6.55V4l5-2.25Z" stroke="currentColor" strokeWidth="1.2" />
-            <path d="m5.75 8 1.4 1.4 3.15-3.15" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8 13.5S2.75 10.45 2.75 6.3A2.8 2.8 0 0 1 8 4.9a2.8 2.8 0 0 1 5.25 1.4C13.25 10.45 8 13.5 8 13.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
           </svg>
-          Anonymous session
+          <span className="font-semibold text-zinc-200">{communityThanks}</span>
+          <span className="hidden sm:inline">thanks today</span>
+          <span className="sm:hidden">thanks</span>
         </div>
       </div>
 

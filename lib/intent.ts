@@ -43,14 +43,16 @@ export function isConversationIntent(
 }
 
 export function pickIntentMatch<
-  T extends { busy: boolean; intent: ConversationIntent },
+  T extends { busy: boolean; intent: ConversationIntent; language: string },
 >(
   peers: readonly T[],
   intent: ConversationIntent,
+  language: string,
   random: () => number = Math.random,
 ): T | null {
   const matches = peers.filter(
-    (peer) => !peer.busy && peer.intent === intent,
+    (peer) =>
+      !peer.busy && peer.intent === intent && peer.language === language,
   );
   if (matches.length === 0) return null;
 

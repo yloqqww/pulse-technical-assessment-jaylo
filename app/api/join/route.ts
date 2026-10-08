@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { applyPrivacyOffset, isValidLatLng } from "@/lib/geo";
 import { isConversationIntent } from "@/lib/intent";
+import { isSessionLanguage } from "@/lib/language";
 import {
   generateSessionCredentials,
   hasOnlyKeys,
@@ -28,16 +29,19 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: message }, { status: 400 });
   }
 
-  if (!hasOnlyKeys(body, ["lat", "lng", "intent"])) {
+  if (!hasOnlyKeys(body, ["lat", "lng", "intent", "language"])) {
     return noStoreJson({ error: "invalid body" }, { status: 400 });
   }
 
-  const { lat, lng, intent } = body;
+  const { lat, lng, intent, language } = body;
   if (!isValidLatLng(lat, lng)) {
     return noStoreJson({ error: "invalid coordinates" }, { status: 400 });
   }
   if (!isConversationIntent(intent)) {
     return noStoreJson({ error: "invalid intent" }, { status: 400 });
+  }
+  if (!isSessionLanguage(language)) {
+    return noStoreJson({ error: "invalid language" }, { status: 400 });
   }
 
   const credentials = generateSessionCredentials();
@@ -50,6 +54,7 @@ export async function POST(request: NextRequest) {
       lat: offset.lat,
       lng: offset.lng,
       intent,
+      language,
       busy: false,
       lastSeen: new Date(),
     },

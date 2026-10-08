@@ -6,6 +6,11 @@ import {
   INTENT_DETAILS,
   type ConversationIntent,
 } from "@/lib/intent";
+import {
+  LANGUAGE_DETAILS,
+  SESSION_LANGUAGES,
+  type SessionLanguage,
+} from "@/lib/language";
 
 export default function EntryGate({
   onReady,
@@ -14,11 +19,13 @@ export default function EntryGate({
     lat: number,
     lng: number,
     intent: ConversationIntent,
+    language: SessionLanguage,
   ) => Promise<void>;
 }) {
   const [status, setStatus] = useState<"idle" | "locating" | "error">("idle");
   const [error, setError] = useState<string>("");
   const [intent, setIntent] = useState<ConversationIntent | null>(null);
+  const [language, setLanguage] = useState<SessionLanguage>("en");
 
   function enter() {
     if (!intent) return;
@@ -30,7 +37,7 @@ export default function EntryGate({
     setStatus("locating");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        void onReady(pos.coords.latitude, pos.coords.longitude, intent).catch(() => {
+        void onReady(pos.coords.latitude, pos.coords.longitude, intent, language).catch(() => {
           setStatus("error");
           setError("Couldn't start a secure session. Please try again.");
         });
@@ -124,6 +131,29 @@ export default function EntryGate({
             })}
           </div>
         </fieldset>
+
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3">
+          <div className="min-w-0">
+            <label htmlFor="session-language" className="block text-xs font-medium text-zinc-200">
+              Conversation language
+            </label>
+            <p className="mt-0.5 text-[10px] leading-4 text-zinc-600">
+              Used for Smart Match and live captions.
+            </p>
+          </div>
+          <select
+            id="session-language"
+            value={language}
+            onChange={(event) => setLanguage(event.target.value as SessionLanguage)}
+            className="focus-ring min-h-10 shrink-0 rounded-lg border border-white/10 bg-[#111719] px-3 text-xs font-medium text-zinc-200 outline-none"
+          >
+            {SESSION_LANGUAGES.map((value) => (
+              <option key={value} value={value}>
+                {LANGUAGE_DETAILS[value].nativeLabel}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <button
           onClick={enter}

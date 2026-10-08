@@ -1,19 +1,47 @@
 // Client-side helpers for the anonymous coordination API.
 import type { PollResponse, SignalType } from "@/lib/types";
 import type { ConversationIntent } from "@/lib/intent";
+import type { SessionLanguage } from "@/lib/language";
+import {
+  isCommunityPulse,
+  type CommunityPulse,
+  type CommunityReaction,
+} from "@/lib/community";
 import type { SessionCredentials } from "@/lib/api-security";
+import type { SafetyAction, SafetyReportReason } from "@/lib/safety";
 
 export type { SessionCredentials } from "@/lib/api-security";
+
+export class ApiError extends Error {
+  constructor(
+    readonly operation: string,
+    readonly status: number,
+    message: string,
+  ) {
+    super(`${operation} failed: ${message}`);
+    this.name = "ApiError";
+  }
+}
+
+export function isUnavailableSignalError(
+  error: unknown,
+): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    (error.status === 403 || error.status === 404 || error.status === 410)
+  );
+}
 
 export async function join(
   lat: number,
   lng: number,
   intent: ConversationIntent,
+  language: SessionLanguage,
 ): Promise<SessionCredentials> {
   const response = await fetch("/api/join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lat, lng, intent }),
+    body: JSON.stringify({ lat, lng, intent, language }),
   });
 
   const data = await readJsonResponse<unknown>(response, "join");
@@ -50,6 +78,51 @@ export async function sendSignal(
   });
 
   await readJsonResponse(response, "signal");
+}
+
+export async function getCommunityPulse(): Promise<CommunityPulse> {
+  const response = await fetch("/api/community", { cache: "no-store" });
+  const data = await readJsonResponse<unknown>(response, "community pulse");
+  if (!isCommunityPulse(data)) {
+    throw new Error("community pulse returned an invalid response");
+  }
+  return data;
+}
+
+export async function sendCommunityThanks(
+  session: SessionCredentials,
+  reaction: CommunityReaction,
+): Promise<CommunityPulse> {
+  const response = await fetch("/api/community", {
+    method: "POST",
+    headers: {
+      ...authHeaders(session),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reaction }),
+  });
+  const data = await readJsonResponse<unknown>(response, "community thanks");
+  if (!isCommunityPulse(data)) {
+    throw new Error("community thanks returned an invalid response");
+  }
+  return data;
+}
+
+export async function sendSafetyAction(
+  session: SessionCredentials,
+  targetId: string,
+  action: SafetyAction,
+  reason?: SafetyReportReason,
+): Promise<void> {
+  const response = await fetch("/api/safety", {
+    method: "POST",
+    headers: {
+      ...authHeaders(session),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ targetId, action, ...(reason ? { reason } : {}) }),
+  });
+  await readJsonResponse(response, "safety action");
 }
 
 // Best-effort authenticated leave that survives the tab closing. A queued
@@ -103,7 +176,7 @@ async function readJsonResponse<T>(
       isErrorResponse(data) && data.error.length <= 160
         ? data.error
         : `HTTP ${response.status}`;
-    throw new Error(`${operation} failed: ${message}`);
+    throw new ApiError(operation, response.status, message);
   }
 
   return data as T;

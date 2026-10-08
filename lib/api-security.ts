@@ -9,6 +9,8 @@ export const SESSION_ID_HEADER = "x-pulse-session-id";
 export const MAX_JOIN_BODY_BYTES = 1024;
 export const MAX_SIGNAL_BODY_BYTES = 72 * 1024;
 export const MAX_LEAVE_BODY_BYTES = 1024;
+export const MAX_COMMUNITY_BODY_BYTES = 512;
+export const MAX_SAFETY_BODY_BYTES = 1024;
 export const MAX_SDP_BYTES = 48 * 1024;
 export const MAX_ICE_BYTES = 4 * 1024;
 

@@ -81,6 +81,19 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: "target unavailable" }, { status: 404 });
   }
 
+  const blocked = await prisma.sessionBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: sender.id, blockedId: toId },
+        { blockerId: toId, blockedId: sender.id },
+      ],
+    },
+    select: { blockerId: true },
+  });
+  if (blocked) {
+    return noStoreJson({ error: "interaction unavailable" }, { status: 403 });
+  }
+
   if (signalType === "request" && target.busy) {
     const delivered = await createBoundedSignal({
       fromId: toId,

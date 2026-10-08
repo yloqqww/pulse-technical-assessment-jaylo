@@ -15,15 +15,17 @@ test("accepts only the four supported conversation intents", () => {
   assert.equal(isConversationIntent(null), false);
 });
 
-test("smart match returns only an available peer with the same intent", () => {
+test("smart match returns only an available peer with the same intent and language", () => {
   const peers = [
-    { id: "busy-talk", intent: "talk" as const, busy: true },
-    { id: "available-listen", intent: "listen" as const, busy: false },
-    { id: "first-talk", intent: "talk" as const, busy: false },
-    { id: "second-talk", intent: "talk" as const, busy: false },
+    { id: "busy-talk", intent: "talk" as const, language: "en", busy: true },
+    { id: "available-listen", intent: "listen" as const, language: "en", busy: false },
+    { id: "filipino-talk", intent: "talk" as const, language: "fil", busy: false },
+    { id: "first-talk", intent: "talk" as const, language: "en", busy: false },
+    { id: "second-talk", intent: "talk" as const, language: "en", busy: false },
   ];
 
-  assert.equal(pickIntentMatch(peers, "talk", () => 0)?.id, "first-talk");
-  assert.equal(pickIntentMatch(peers, "talk", () => 0.99)?.id, "second-talk");
-  assert.equal(pickIntentMatch(peers, "celebrate", () => 0), null);
+  assert.equal(pickIntentMatch(peers, "talk", "en", () => 0)?.id, "first-talk");
+  assert.equal(pickIntentMatch(peers, "talk", "en", () => 0.99)?.id, "second-talk");
+  assert.equal(pickIntentMatch(peers, "talk", "fil", () => 0)?.id, "filipino-talk");
+  assert.equal(pickIntentMatch(peers, "celebrate", "en", () => 0), null);
 });
