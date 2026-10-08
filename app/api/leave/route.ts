@@ -50,6 +50,10 @@ export async function POST(request: NextRequest) {
       where: { id: partnerId },
       data: { busy: false },
     });
+    await prisma.connectionPair.update({
+      where: { id: activePair.id },
+      data: { status: "terminated", terminatedAt: new Date() },
+    });
   }
 
   await prisma.signal.deleteMany({

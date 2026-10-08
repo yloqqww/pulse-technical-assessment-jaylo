@@ -1,4 +1,5 @@
 import { prisma } from "./prisma.ts";
+import { STALE_MS } from "./presence.ts";
 
 export type ConnectionStatus = "pending" | "connected" | "terminated";
 
@@ -23,6 +24,7 @@ export async function authorizeSignalTransition(params: {
   const { senderId, targetId, type } = params;
   const now = new Date();
   const stalePendingCutoff = new Date(now.getTime() - PENDING_TIMEOUT_MS);
+  const stalePresenceCutoff = new Date(now.getTime() - STALE_MS);
 
   // Clean up any timed-out pending connections involving either peer
   await prisma.connectionPair.updateMany({
@@ -43,42 +45,88 @@ export async function authorizeSignalTransition(params: {
   });
 
   if (type === "request") {
-    // Check if target is already in an active connection
+    // Terminate any previous pairs between these exact two peers so they can connect cleanly
+    await prisma.connectionPair.updateMany({
+      where: {
+        status: { in: ["pending", "connected"] },
+        OR: [
+          { initiatorId: senderId, receiverId: targetId },
+          { initiatorId: targetId, receiverId: senderId },
+        ],
+      },
+      data: {
+        status: "terminated",
+        terminatedAt: now,
+      },
+    });
+
+    // Check if target is in an active connection with someone else
     const targetActive = await prisma.connectionPair.findFirst({
       where: {
         status: { in: ["pending", "connected"] },
         OR: [
-          { initiatorId: targetId },
-          { receiverId: targetId },
+          { initiatorId: targetId, receiverId: { not: senderId } },
+          { receiverId: targetId, initiatorId: { not: senderId } },
         ],
       },
     });
 
     if (targetActive) {
-      // If target is already connected or pending with someone else, decline request
-      return {
-        allowed: false,
-        autoDeclined: true,
-        error: "target is currently busy",
-      };
+      const otherId =
+        targetActive.initiatorId === targetId
+          ? targetActive.receiverId
+          : targetActive.initiatorId;
+      const otherAlive = await prisma.presence.findFirst({
+        where: { id: otherId, lastSeen: { gte: stalePresenceCutoff } },
+        select: { id: true },
+      });
+
+      if (otherAlive) {
+        return {
+          allowed: false,
+          autoDeclined: true,
+          error: "target is currently busy",
+        };
+      }
+
+      await prisma.connectionPair.update({
+        where: { id: targetActive.id },
+        data: { status: "terminated", terminatedAt: now },
+      });
     }
 
-    // Check if sender already has an active connection with someone else
+    // Check if sender has an active connection with someone else
     const senderActive = await prisma.connectionPair.findFirst({
       where: {
         status: "connected",
         OR: [
-          { initiatorId: senderId },
-          { receiverId: senderId },
+          { initiatorId: senderId, receiverId: { not: targetId } },
+          { receiverId: senderId, initiatorId: { not: targetId } },
         ],
       },
     });
 
     if (senderActive) {
-      return {
-        allowed: false,
-        error: "you already have an active conversation",
-      };
+      const otherId =
+        senderActive.initiatorId === senderId
+          ? senderActive.receiverId
+          : senderActive.initiatorId;
+      const otherAlive = await prisma.presence.findFirst({
+        where: { id: otherId, lastSeen: { gte: stalePresenceCutoff } },
+        select: { id: true },
+      });
+
+      if (otherAlive) {
+        return {
+          allowed: false,
+          error: "you already have an active conversation",
+        };
+      }
+
+      await prisma.connectionPair.update({
+        where: { id: senderActive.id },
+        data: { status: "terminated", terminatedAt: now },
+      });
     }
 
     // Clean up any previous terminated rows between these exact two peers

@@ -364,6 +364,7 @@ export default function Home() {
       if (current.kind !== "reconnecting" || current.peerId !== peerId) return;
 
       const completedConversation = connectionEstablishedRef.current;
+      queueSignal(peerId, "end");
       teardown("Connection lost. You can find another match.");
       if (completedConversation && !hasThanked) {
         setThanksError(null);
@@ -466,7 +467,10 @@ export default function Home() {
         ...(iceConfig?.iceServers ?? []),
         ...(customTurn ? [customTurn] : []),
       ] as RTCIceServer[],
-      iceTransportPolicy: forceRelay ? "relay" : "all",
+      iceTransportPolicy:
+        forceRelay && (Boolean(iceConfig?.turnConfigured) || Boolean(customTurn))
+          ? "relay"
+          : "all",
     });
     peerRef.current = ps;
   }

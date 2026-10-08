@@ -25,17 +25,17 @@ const POLICIES: Record<AbuseAction, RateLimitPolicy> = {
   },
   poll: {
     windowMs: 60_000,
-    maxRequests: 90,
+    maxRequests: 150,
     basePenaltyMs: 60_000, // 1 minute
   },
   signal: {
     windowMs: 60_000,
-    maxRequests: 80,
+    maxRequests: 300,
     basePenaltyMs: 60_000,
   },
   "signal:request": {
     windowMs: 60_000,
-    maxRequests: 12,
+    maxRequests: 20,
     basePenaltyMs: 180_000, // 3 minutes
   },
   safety: {
@@ -59,7 +59,7 @@ const POLICIES: Record<AbuseAction, RateLimitPolicy> = {
 const ABUSE_SALT = process.env.ABUSE_PROTECTION_SALT ?? "pulse-distributed-abuse-salt-2026";
 
 /**
- * Extracts the client IP from standard proxy headers and returns a cryptographic
+ * Extracts the client IP and session from standard headers and returns a cryptographic
  * one-way hash with a server secret.
  *
  * Strict Privacy Guarantee: Raw IP addresses are NEVER logged, saved, or exposed.
@@ -68,10 +68,11 @@ export function hashClientIdentifier(request: NextRequest, action: AbuseAction):
   const forwarded = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
   const rawIp = forwarded ? forwarded.split(",")[0].trim() : realIp ?? "127.0.0.1";
+  const sessionId = request.headers.get("x-pulse-session-id") ?? "";
 
-  // Double-hash raw IP with salt and action scope
+  // Double-hash raw IP and session with salt and action scope
   const hash = createHash("sha256")
-    .update(`${rawIp}:${action}:${ABUSE_SALT}`)
+    .update(`${rawIp}:${sessionId}:${action}:${ABUSE_SALT}`)
     .digest("hex");
 
   return `client_${hash.slice(0, 32)}`;
