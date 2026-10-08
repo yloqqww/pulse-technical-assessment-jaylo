@@ -11,6 +11,7 @@ import {
   SESSION_LANGUAGES,
   type SessionLanguage,
 } from "@/lib/language";
+import { getRandomWorldwideCoordinate } from "@/lib/geo";
 
 export default function EntryGate({
   onReady,
@@ -26,9 +27,21 @@ export default function EntryGate({
   const [error, setError] = useState<string>("");
   const [intent, setIntent] = useState<ConversationIntent | null>(null);
   const [language, setLanguage] = useState<SessionLanguage>("en");
+  const [locationMode, setLocationMode] = useState<"worldwide" | "local">("worldwide");
 
   function enter() {
     if (!intent) return;
+
+    if (locationMode === "worldwide") {
+      setStatus("locating");
+      const coord = getRandomWorldwideCoordinate();
+      void onReady(coord.lat, coord.lng, intent, language).catch(() => {
+        setStatus("error");
+        setError("Couldn't start a secure session. Please try again.");
+      });
+      return;
+    }
+
     if (!("geolocation" in navigator)) {
       setStatus("error");
       setError("Your browser doesn't support location access.");
@@ -155,6 +168,28 @@ export default function EntryGate({
           </select>
         </div>
 
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3">
+          <div className="min-w-0">
+            <label htmlFor="location-mode" className="block text-xs font-medium text-zinc-200">
+              Globe placement
+            </label>
+            <p className="mt-0.5 text-[10px] leading-4 text-zinc-600">
+              {locationMode === "worldwide"
+                ? "Teleports you to a random hub globally."
+                : "Places you near your current location."}
+            </p>
+          </div>
+          <select
+            id="location-mode"
+            value={locationMode}
+            onChange={(event) => setLocationMode(event.target.value as "worldwide" | "local")}
+            className="focus-ring min-h-10 shrink-0 rounded-lg border border-white/10 bg-[#111719] px-3 text-xs font-medium text-zinc-200 outline-none"
+          >
+            <option value="worldwide">🌍 Worldwide Random</option>
+            <option value="local">📍 Local Area (1–3 km)</option>
+          </select>
+        </div>
+
         <button
           onClick={enter}
           disabled={status === "locating" || !intent}
@@ -191,7 +226,7 @@ export default function EntryGate({
               <path d="M8 14s4.5-3.65 4.5-7.5a4.5 4.5 0 1 0-9 0C3.5 10.35 8 14 8 14Z" stroke="currentColor" strokeWidth="1.2" />
               <circle cx="8" cy="6.5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
             </svg>
-            Location offset 1–3 km
+            {locationMode === "worldwide" ? "Worldwide random placement" : "Location offset 1–3 km"}
           </p>
         </div>
       </section>
