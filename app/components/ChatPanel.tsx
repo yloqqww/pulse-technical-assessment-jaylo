@@ -237,8 +237,8 @@ export default function ChatPanel({
         className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-white/15 sm:hidden"
         aria-hidden="true"
       />
-      <header className="flex min-h-[72px] items-center justify-between border-b border-white/8 px-4 sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="flex min-h-[64px] sm:min-h-[72px] items-center justify-between gap-2 border-b border-white/8 px-3.5 sm:px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
           <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.045]">
             <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 text-zinc-400" fill="none">
               <circle cx="10" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" />
@@ -250,18 +250,20 @@ export default function ChatPanel({
               }`}
             />
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-[-0.015em]">Anonymous stranger</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-zinc-500" aria-live="polite">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs sm:text-sm font-semibold tracking-[-0.015em] text-zinc-100">
+              Anonymous stranger
+            </p>
+            <p className="mt-0.5 truncate text-[10px] sm:text-[11px] text-zinc-500" aria-live="polite">
               {connected
                 ? "Private connection active"
                 : reconnecting
-                  ? "Reconnecting… messages are paused"
+                  ? "Reconnecting…"
                   : "Connecting…"}
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             onClick={onSafety}
             aria-label="Open safety options"
@@ -278,7 +280,7 @@ export default function ChatPanel({
               onClick={onOpenDiagnostics}
               aria-label="Connection diagnostics and TURN"
               title="Connection & TURN diagnostics"
-              className="focus-ring pressable flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-zinc-400 hover:border-[#74e8bd]/40 hover:bg-[#74e8bd]/10 hover:text-[#74e8bd]"
+              className="focus-ring pressable hidden sm:flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-zinc-400 hover:border-[#74e8bd]/40 hover:bg-[#74e8bd]/10 hover:text-[#74e8bd]"
             >
               <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4" fill="none">
                 <path d="M2.5 12h2.5l2-6 3 9 2-5h3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -294,13 +296,13 @@ export default function ChatPanel({
                 ? `Translating to ${SUPPORTED_TRANSLATION_LANGUAGES[targetLang].label} (Click to cycle)`
                 : "Enable live translation"
             }
-            className={`focus-ring pressable flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
+            className={`focus-ring pressable flex h-9 w-9 sm:w-auto items-center justify-center sm:justify-start sm:gap-1.5 rounded-lg border p-0 sm:px-2.5 text-xs font-medium transition ${
               translateEnabled
                 ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300"
                 : "border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white"
             }`}
           >
-            <span>🌐</span>
+            <span className="text-sm">🌐</span>
             <span className="hidden sm:inline">
               {translateEnabled
                 ? `${SUPPORTED_TRANSLATION_LANGUAGES[targetLang].flag} ${targetLang.toUpperCase()}`
@@ -322,7 +324,7 @@ export default function ChatPanel({
           </button>
           <button
             onClick={onEnd}
-            className="focus-ring pressable h-9 rounded-lg border border-red-300/10 bg-red-400/10 px-3 text-xs font-medium text-red-200 hover:border-red-300/20 hover:bg-red-400/15"
+            className="focus-ring pressable h-9 rounded-lg border border-red-300/10 bg-red-400/10 px-2.5 sm:px-3 text-xs font-medium text-red-200 hover:border-red-300/20 hover:bg-red-400/15"
           >
             Leave
           </button>
