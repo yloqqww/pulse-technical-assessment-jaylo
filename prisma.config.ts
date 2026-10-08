@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 // Prisma 7 reads migration/introspection connection details from here (the
 // schema no longer holds a `url`). The Prisma CLI does not auto-load .env, so
@@ -16,6 +16,6 @@ export default defineConfig({
     path: path.join("prisma", "migrations"),
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: process.env.DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder",
   },
 });
