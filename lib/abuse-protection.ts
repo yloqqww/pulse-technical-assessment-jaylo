@@ -8,7 +8,8 @@ export type AbuseAction =
   | "signal"
   | "signal:request"
   | "safety"
-  | "thanks";
+  | "thanks"
+  | "moderator";
 
 interface RateLimitPolicy {
   windowMs: number;
@@ -47,7 +48,13 @@ const POLICIES: Record<AbuseAction, RateLimitPolicy> = {
     maxRequests: 6,
     basePenaltyMs: 300_000,
   },
+  moderator: {
+    windowMs: 900_000, // 15 minutes
+    maxRequests: 5, // Max 5 attempts
+    basePenaltyMs: 1_800_000, // 30 minutes lockout
+  },
 };
+
 
 const ABUSE_SALT = process.env.ABUSE_PROTECTION_SALT ?? "pulse-distributed-abuse-salt-2026";
 

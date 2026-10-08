@@ -4,15 +4,28 @@ import { STALE_MS } from "@/lib/presence";
 import { noStoreJson } from "@/lib/api-security";
 import { verifyModeratorRequest } from "@/lib/moderator-auth";
 import { getUtcDay } from "@/lib/community";
+import { checkDistributedAbuse } from "@/lib/abuse-protection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const abuse = await checkDistributedAbuse(request, "moderator");
+    if (!abuse.allowed) {
+      return noStoreJson(
+        { error: "too_many_attempts", retryAfter: abuse.retryAfterSeconds },
+        {
+          status: 429,
+          headers: { "Retry-After": String(abuse.retryAfterSeconds ?? 1800) },
+        },
+      );
+    }
+
     if (!verifyModeratorRequest(request)) {
       return noStoreJson({ error: "unauthorized_moderator" }, { status: 401 });
     }
+
 
     const now = new Date();
     const staleCutoff = new Date(now.getTime() - STALE_MS);
